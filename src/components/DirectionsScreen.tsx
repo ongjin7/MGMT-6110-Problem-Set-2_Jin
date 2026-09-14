@@ -3,19 +3,13 @@ import { LocationItem, TravelMode, RouteResult, BusStopItem, TrainStationItem, F
 import { SingaporeMap } from './SingaporeMap';
 import { BusArrivalSection } from './BusArrivalSection';
 import { DataStateNotice } from './DataStateNotice';
+import { DetailedDirections } from './DetailedDirections';
 import {
   Search,
   MapPin,
   Navigation,
-  Bus,
-  Car,
-  Footprints,
-  Bike,
-  Clock,
-  Compass,
   ArrowRight,
   Sparkles,
-  ExternalLink
 } from 'lucide-react';
 
 interface DirectionsScreenProps {
@@ -31,14 +25,85 @@ const OLA_ORIGIN = {
   longitude: 103.8886,
 };
 
-// Common destinations for S544651 residents
+// Standardised single locations that work with OneMap without brackets after name
 const QUICK_DESTINATIONS = [
-  { name: 'Compass One & Sengkang MRT', query: 'Compass One' },
-  { name: 'Jewel Changi Airport (Direct Bus 110)', query: 'Jewel Changi Airport' },
-  { name: 'Sengkang General Hospital', query: 'Sengkang General Hospital' },
-  { name: 'Waterway Point Punggol', query: 'Waterway Point' },
-  { name: 'Raffles Place (CBD)', query: 'Raffles Place MRT' },
-  { name: 'Orchard Road', query: 'ION Orchard' },
+  {
+    name: 'Sengkang MRT',
+    query: 'Sengkang MRT',
+    location: {
+      name: 'Sengkang MRT',
+      address: '5 Sengkang Square, Singapore 545062',
+      postalCode: '545062',
+      latitude: 1.39169,
+      longitude: 103.89548,
+    },
+  },
+  {
+    name: 'Jewel Changi Airport',
+    query: 'Jewel Changi Airport',
+    location: {
+      name: 'Jewel Changi Airport',
+      address: '78 Airport Boulevard, Singapore 819666',
+      postalCode: '819666',
+      latitude: 1.36034,
+      longitude: 103.98907,
+    },
+  },
+  {
+    name: 'Compass One',
+    query: 'Compass One',
+    location: {
+      name: 'Compass One',
+      address: '1 Sengkang Square, Singapore 545078',
+      postalCode: '545078',
+      latitude: 1.3924,
+      longitude: 103.8946,
+    },
+  },
+  {
+    name: 'Sengkang General Hospital',
+    query: 'Sengkang General Hospital',
+    location: {
+      name: 'Sengkang General Hospital',
+      address: '110 Sengkang East Way, Singapore 544886',
+      postalCode: '544886',
+      latitude: 1.3942,
+      longitude: 103.8931,
+    },
+  },
+  {
+    name: 'Waterway Point',
+    query: 'Waterway Point',
+    location: {
+      name: 'Waterway Point',
+      address: '83 Punggol Central, Singapore 828761',
+      postalCode: '828761',
+      latitude: 1.4068,
+      longitude: 103.9018,
+    },
+  },
+  {
+    name: 'ION Orchard',
+    query: 'ION Orchard',
+    location: {
+      name: 'ION Orchard',
+      address: '2 Orchard Turn, Singapore 238801',
+      postalCode: '238801',
+      latitude: 1.304,
+      longitude: 103.8318,
+    },
+  },
+  {
+    name: 'Raffles Place MRT',
+    query: 'Raffles Place MRT',
+    location: {
+      name: 'Raffles Place MRT',
+      address: '5 Raffles Place, Singapore 048618',
+      postalCode: '048618',
+      latitude: 1.283,
+      longitude: 103.8519,
+    },
+  },
 ];
 
 export const DirectionsScreen: React.FC<DirectionsScreenProps> = ({
@@ -180,7 +245,7 @@ export const DirectionsScreen: React.FC<DirectionsScreenProps> = ({
   }, [initialDestination]);
 
   // Execute OneMap Search
-  const handleSearch = async (term: string) => {
+  const handleSearch = async (term: string, autoSelectFirst: boolean = false) => {
     if (!term || term.trim() === '') return;
 
     setSearchState('loading');
@@ -206,6 +271,9 @@ export const DirectionsScreen: React.FC<DirectionsScreenProps> = ({
       } else {
         setSearchResults(data.results);
         setSearchState('success');
+        if (autoSelectFirst && data.results.length > 0) {
+          handleSelectLocation(data.results[0]);
+        }
       }
     } catch (err) {
       setSearchState('unreachable');
@@ -328,7 +396,7 @@ export const DirectionsScreen: React.FC<DirectionsScreenProps> = ({
         {/* Origin Card (Starting point is ALWAYS OLA Executive Condominium) */}
         <div
           id="origin-ola-card"
-          className="p-4 rounded-2xl bg-gradient-to-r from-teal-900 via-teal-800 to-slate-900 text-white shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-teal-700/50"
+          className="p-4 rounded-2xl bg-gradient-to-r from-teal-900 via-teal-800 to-slate-900 text-white shadow-md flex items-center gap-3 border border-teal-700/50"
         >
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-300 shrink-0">
@@ -342,11 +410,6 @@ export const DirectionsScreen: React.FC<DirectionsScreenProps> = ({
                 70 Anchorvale Crescent • Sengkang, Singapore <span className="font-mono text-teal-300 font-semibold">(S544651)</span>
               </p>
             </div>
-          </div>
-
-          <div className="flex items-center gap-2 text-xs text-teal-100/80 bg-teal-950/50 px-3 py-1.5 rounded-xl border border-teal-700/40 shrink-0">
-            <Compass className="w-3.5 h-3.5 text-teal-400" />
-            <span>Cheng Lim LRT (SW1) • 150m</span>
           </div>
         </div>
 
@@ -368,6 +431,12 @@ export const DirectionsScreen: React.FC<DirectionsScreenProps> = ({
                 type="text"
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleSearch(searchTerm, true);
+                  }
+                }}
                 onFocus={() => {
                   if (searchResults.length > 0) setIsDropdownOpen(true);
                 }}
@@ -376,7 +445,7 @@ export const DirectionsScreen: React.FC<DirectionsScreenProps> = ({
               />
               <button
                 type="button"
-                onClick={() => handleSearch(searchTerm)}
+                onClick={() => handleSearch(searchTerm, true)}
                 className="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
               >
                 Search
@@ -394,8 +463,10 @@ export const DirectionsScreen: React.FC<DirectionsScreenProps> = ({
                   key={q.name}
                   type="button"
                   onClick={() => {
-                    setSearchTerm(q.query);
-                    handleSearch(q.query);
+                    setSearchTerm(q.name);
+                    setSelectedDestination(q.location);
+                    setIsDropdownOpen(false);
+                    setSearchState('idle');
                   }}
                   className="px-2.5 py-1 rounded-lg text-xs bg-slate-100 hover:bg-teal-50 hover:text-teal-800 text-slate-700 border border-slate-200/70 transition-colors cursor-pointer"
                 >
@@ -453,14 +524,14 @@ export const DirectionsScreen: React.FC<DirectionsScreenProps> = ({
         </div>
       </section>
 
-      {/* Selected Destination, Mode Selector & Route Card */}
+      {/* Selected Destination, Mode Selector & Detailed Directions */}
       {selectedDestination && (
         <section id="selected-route-section" className="space-y-4">
-          <div className="p-5 rounded-2xl border border-slate-200 bg-white shadow-xs space-y-4">
-            {/* Destination Summary & Mode Selection */}
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+          <div className="p-5 rounded-2xl border border-slate-200 bg-white shadow-xs space-y-5">
+            {/* Destination Summary */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
               <div>
-                <span className="text-xs font-bold text-teal-700 uppercase tracking-wider">
+                <span className="text-[11px] font-bold text-teal-700 uppercase tracking-wider">
                   Target Destination
                 </span>
                 <h3 className="text-lg sm:text-xl font-black text-slate-900">
@@ -471,152 +542,24 @@ export const DirectionsScreen: React.FC<DirectionsScreenProps> = ({
                 </p>
               </div>
 
-              {/* Travel Mode Pills */}
-              <div
-                id="travel-mode-selector"
-                className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200 self-start lg:self-auto"
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedDestination(null);
+                  setSearchTerm('');
+                }}
+                className="self-start sm:self-auto text-xs text-slate-500 hover:text-slate-800 underline underline-offset-2 cursor-pointer"
               >
-                <button
-                  type="button"
-                  onClick={() => setTravelMode('pt')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                    travelMode === 'pt'
-                      ? 'bg-teal-700 text-white shadow-2xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  <Bus className="w-3.5 h-3.5" />
-                  <span>Transit</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setTravelMode('drive')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                    travelMode === 'drive'
-                      ? 'bg-teal-700 text-white shadow-2xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  <Car className="w-3.5 h-3.5" />
-                  <span>Drive</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setTravelMode('cycle')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                    travelMode === 'cycle'
-                      ? 'bg-teal-700 text-white shadow-2xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  <Bike className="w-3.5 h-3.5" />
-                  <span>Cycle</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setTravelMode('walk')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                    travelMode === 'walk'
-                      ? 'bg-teal-700 text-white shadow-2xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  <Footprints className="w-3.5 h-3.5" />
-                  <span>Walk</span>
-                </button>
-              </div>
+                Clear Destination
+              </button>
             </div>
 
-            {/* 4 Distinct Sentences for Route State */}
-            <DataStateNotice
-              id="route-state-notice"
-              state={routeState}
-              upstreamStatus={routeUpstreamStatus}
-              customContext="OneMap Routing API"
-              onRetry={() => {
-                if (selectedDestination) setSelectedDestination({ ...selectedDestination });
-              }}
+            {/* Detailed Directions for Public Transport, Car, Bike, and Walking */}
+            <DetailedDirections
+              destination={selectedDestination}
+              initialMode={travelMode}
+              onModeChange={(mode) => setTravelMode(mode)}
             />
-
-            {/* Route Stats & Timing Info */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
-                <span className="text-[11px] font-semibold text-slate-500 uppercase block">
-                  Est. Travel Time
-                </span>
-                <div className="text-xl font-black text-slate-900 mt-1 flex items-baseline gap-1">
-                  {routeResult?.routeData?.route_summary?.total_time
-                    ? `${Math.round(routeResult.routeData.route_summary.total_time / 60)} min`
-                    : fallback
-                    ? `~${fallback.timeMins} min`
-                    : '--'}
-                </div>
-                <span className="text-[10px] text-teal-700 font-medium">From OLA EC</span>
-              </div>
-
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
-                <span className="text-[11px] font-semibold text-slate-500 uppercase block">
-                  Distance
-                </span>
-                <div className="text-xl font-black text-slate-900 mt-1 flex items-baseline gap-1">
-                  {routeResult?.routeData?.route_summary?.total_distance
-                    ? `${(routeResult.routeData.route_summary.total_distance / 1000).toFixed(1)} km`
-                    : fallback
-                    ? `${fallback.distanceKm} km`
-                    : '--'}
-                </div>
-                <span className="text-[10px] text-slate-500 font-medium">Singapore Route</span>
-              </div>
-
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
-                <span className="text-[11px] font-semibold text-slate-500 uppercase block">
-                  Recommended First Step
-                </span>
-                <div className="text-xs font-bold text-slate-800 mt-1 line-clamp-2">
-                  {travelMode === 'pt'
-                    ? 'Cheng Lim LRT or Bus 110/43 outside OLA'
-                    : travelMode === 'drive'
-                    ? 'Exit to TPE via Anchorvale St'
-                    : 'Punggol River Park Connector'}
-                </div>
-              </div>
-
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
-                <span className="text-[11px] font-semibold text-slate-500 uppercase block">
-                  Routing Engine
-                </span>
-                <div className="text-xs font-bold text-teal-800 mt-1">
-                  OneMap Routing API
-                </div>
-                <span className="text-[10px] text-slate-500">Singapore Land Authority</span>
-              </div>
-            </div>
-
-            {/* Interactive Singapore Route Map */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-xs text-slate-600">
-                <span className="font-bold flex items-center gap-1.5">
-                  <Navigation className="w-3.5 h-3.5 text-teal-700" />
-                  Route Geometry & Corridor Overview
-                </span>
-                <span className="text-slate-400 text-[11px]">
-                  Origin [1.3966, 103.8886] → Target
-                </span>
-              </div>
-
-              <SingaporeMap
-                originCoords={[OLA_ORIGIN.latitude, OLA_ORIGIN.longitude]}
-                destCoords={[selectedDestination.latitude, selectedDestination.longitude]}
-                destName={selectedDestination.name}
-                travelMode={travelMode}
-                routeData={routeResult?.routeData}
-                viewMode="route"
-                heightClass="h-[340px] sm:h-[400px]"
-              />
-            </div>
           </div>
         </section>
       )}
