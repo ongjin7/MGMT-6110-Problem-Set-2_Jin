@@ -109,6 +109,29 @@ export interface TemperatureData {
   source?: string;
 }
 
+export type PsiCategory = 'Good' | 'Moderate' | 'Unhealthy' | 'Very Unhealthy' | 'Hazardous';
+
+export interface PsiData {
+  targetLocation: string;
+  region: string;
+  psi24Hourly: number | null;
+  category: PsiCategory;
+  exerciseRecommendation: string;
+  shortAdvice: string;
+  exerciseAllowed: boolean;
+  alertLevel: 'normal' | 'warning' | 'danger' | 'critical';
+  timestamp: string | null;
+  updatedTimestamp: string | null;
+  regionalPsi?: {
+    north: number | null;
+    east: number | null;
+    central: number | null;
+    west: number | null;
+    south: number | null;
+  };
+  source?: string;
+}
+
 export interface IntegrationHealth {
   keyConfigured: boolean;
   upstreamAnswered: boolean;

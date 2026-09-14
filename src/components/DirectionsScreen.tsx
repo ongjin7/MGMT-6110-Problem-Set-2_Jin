@@ -466,11 +466,32 @@ export const DirectionsScreen: React.FC<DirectionsScreenProps> = ({
               <input
                 ref={searchInputRef}
                 id="destination-search-input"
+                name="ola_destination_query_search"
                 type="text"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                data-lpignore="true"
+                data-form-type="other"
                 value={searchTerm}
                 onChange={e => {
                   isSelectingRef.current = false;
-                  setSearchTerm(e.target.value);
+                  const val = e.target.value;
+                  if (
+                    val.toLowerCase().includes('singapore management university') &&
+                    !searchTerm
+                  ) {
+                    return;
+                  }
+                  setSearchTerm(val);
+                }}
+                onClick={e => {
+                  const target = e.target as HTMLInputElement;
+                  if (target.value.toLowerCase().includes('singapore management university')) {
+                    target.value = '';
+                    setSearchTerm('');
+                  }
                 }}
                 onKeyDown={e => {
                   if (e.key === 'Enter') {
@@ -478,7 +499,11 @@ export const DirectionsScreen: React.FC<DirectionsScreenProps> = ({
                     handleSearch(searchTerm, true);
                   }
                 }}
-                onFocus={() => {
+                onFocus={e => {
+                  if (e.target.value.toLowerCase().includes('singapore management university')) {
+                    e.target.value = '';
+                    setSearchTerm('');
+                  }
                   if (
                     searchResults.length > 0 &&
                     (!selectedDestination ||

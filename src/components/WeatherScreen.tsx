@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { WeatherData, TemperatureData, ActivityRecommendation, FetchState, LocationItem } from '../types';
+import { WeatherData, TemperatureData, PsiData, ActivityRecommendation, FetchState, LocationItem } from '../types';
 import { DataStateNotice } from './DataStateNotice';
 import {
   CloudSun,
@@ -15,7 +15,12 @@ import {
   Coffee,
   Sparkles,
   MapPin,
-  Clock
+  Clock,
+  Wind,
+  Activity,
+  HeartPulse,
+  CheckCircle2,
+  AlertTriangle
 } from 'lucide-react';
 
 interface WeatherScreenProps {
@@ -195,6 +200,10 @@ export const WeatherScreen: React.FC<WeatherScreenProps> = ({
   const [temperatureState, setTemperatureState] = useState<FetchState>('loading');
   const [tempUpstreamStatus, setTempUpstreamStatus] = useState<number | null>(null);
 
+  const [psiData, setPsiData] = useState<PsiData | null>(null);
+  const [psiState, setPsiState] = useState<FetchState>('loading');
+  const [psiUpstreamStatus, setPsiUpstreamStatus] = useState<number | null>(null);
+
   // Fetch live weather from /api/weather
   const fetchWeather = async () => {
     setWeatherState('loading');
@@ -251,9 +260,38 @@ export const WeatherScreen: React.FC<WeatherScreenProps> = ({
     }
   };
 
+  // Fetch live 24-hour PSI from /api/psi
+  const fetchPsi = async () => {
+    setPsiState('loading');
+    setPsiUpstreamStatus(null);
+    try {
+      const res = await fetch('/api/psi');
+      if (!res.ok) {
+        setPsiUpstreamStatus(res.status);
+        if (res.status === 401 || res.status === 403 || res.status === 503) {
+          setPsiState('refused');
+        } else {
+          setPsiState('unreachable');
+        }
+        return;
+      }
+      const data = await res.json();
+      if (!data || data.psi24Hourly === null) {
+        setPsiData(null);
+        setPsiState('empty');
+      } else {
+        setPsiData(data);
+        setPsiState('success');
+      }
+    } catch (err) {
+      setPsiState('unreachable');
+    }
+  };
+
   useEffect(() => {
     fetchWeather();
     fetchTemperature();
+    fetchPsi();
   }, []);
 
   // Determine rule-based recommendations strictly from live upstream weather data
@@ -298,6 +336,23 @@ export const WeatherScreen: React.FC<WeatherScreenProps> = ({
     if (f.includes('shower') || f.includes('rain')) return <CloudRain className="w-10 h-10 text-teal-600" />;
     if (f.includes('partly')) return <CloudSun className="w-10 h-10 text-amber-500" />;
     return <Sun className="w-10 h-10 text-amber-500" />;
+  };
+
+  const getPsiBadgeClass = (category: string) => {
+    switch (category) {
+      case 'Good':
+        return 'bg-emerald-100 text-emerald-800 border-emerald-300';
+      case 'Moderate':
+        return 'bg-sky-100 text-sky-800 border-sky-300';
+      case 'Unhealthy':
+        return 'bg-amber-100 text-amber-800 border-amber-300';
+      case 'Very Unhealthy':
+        return 'bg-orange-100 text-orange-800 border-orange-300';
+      case 'Hazardous':
+        return 'bg-rose-100 text-rose-800 border-rose-300';
+      default:
+        return 'bg-slate-100 text-slate-800 border-slate-300';
+    }
   };
 
   const handleRouteToPlace = (place: ActivityRecommendation) => {
@@ -484,6 +539,186 @@ export const WeatherScreen: React.FC<WeatherScreenProps> = ({
             </div>
           </div>
         )}
+      </section>
+
+      {/* Air Quality & Haze Section */}
+      <section id="air-quality-haze-section" className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Wind className="w-5 h-5 text-teal-700" />
+            <h2 className="text-base sm:text-lg font-bold text-slate-900">
+              Air Quality & Haze
+            </h2>
+          </div>
+          <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200">
+            NEA 24-Hour PSI Reading
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Card 1: Official 24-Hour PSI and Category */}
+          <div
+            id="sengkang-psi-card"
+            className="p-5 rounded-2xl border border-slate-200 bg-white shadow-xs flex flex-col justify-between space-y-4"
+          >
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-teal-700 uppercase tracking-wider">
+                  24-Hour PSI & Category
+                </span>
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-teal-50 text-teal-800 border border-teal-200/60">
+                  Region: North (Sengkang)
+                </span>
+              </div>
+
+              {/* Data State Notice for PSI */}
+              <div className="mt-3">
+                <DataStateNotice
+                  id="psi-state-notice"
+                  state={psiState}
+                  upstreamStatus={psiUpstreamStatus}
+                  customContext="National Environment Agency (NEA) 24-Hour PSI"
+                  onRetry={fetchPsi}
+                />
+              </div>
+
+              {psiState === 'success' && psiData && (
+                <div className="mt-4 flex items-center justify-between">
+                  <div>
+                    <div className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight flex items-baseline gap-2.5">
+                      <span>{psiData.psi24Hourly}</span>
+                      <span
+                        className={`text-xs sm:text-sm font-bold px-2.5 py-0.5 rounded-full border ${getPsiBadgeClass(
+                          psiData.category
+                        )}`}
+                      >
+                        {psiData.category}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Category:{' '}
+                      <span className="font-semibold text-slate-800">{psiData.category}</span>{' '}
+                      (0–50 Good, 51–100 Moderate, 101–200 Unhealthy)
+                    </p>
+                    {psiData.regionalPsi && (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        <span className="text-[10px] font-semibold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                          North: {psiData.regionalPsi.north ?? '–'}
+                        </span>
+                        <span className="text-[10px] font-medium text-slate-500 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200">
+                          East: {psiData.regionalPsi.east ?? '–'}
+                        </span>
+                        <span className="text-[10px] font-medium text-slate-500 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200">
+                          Central: {psiData.regionalPsi.central ?? '–'}
+                        </span>
+                        <span className="text-[10px] font-medium text-slate-500 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200">
+                          West: {psiData.regionalPsi.west ?? '–'}
+                        </span>
+                        <span className="text-[10px] font-medium text-slate-500 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200">
+                          South: {psiData.regionalPsi.south ?? '–'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-3 rounded-2xl bg-teal-50/70 border border-teal-200/50 shrink-0">
+                    <Wind className="w-10 h-10 text-teal-600" />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Reading Timestamp */}
+            {psiData && (
+              <div className="pt-3 border-t border-slate-100 flex flex-col gap-1 text-[11px] text-slate-500">
+                <div className="flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span>Verified Official NEA Air Quality Reading</span>
+                </div>
+                <div className="text-[10px] text-slate-400">
+                  Source: {psiData.source || 'National Environment Agency via data.gov.sg'} • Updated:{' '}
+                  {psiData.updatedTimestamp
+                    ? new Date(psiData.updatedTimestamp).toLocaleTimeString('en-SG', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })
+                    : 'Recent'}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Card 2: Should I exercise outdoors? Recommendation */}
+          <div
+            id="sengkang-exercise-card"
+            className="p-5 rounded-2xl border border-slate-200 bg-white shadow-xs flex flex-col justify-between space-y-4"
+          >
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-amber-700 uppercase tracking-wider">
+                  Should I Exercise Outdoors?
+                </span>
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200/60">
+                  Health Advisory
+                </span>
+              </div>
+
+              {/* Data State Notice for Advisory */}
+              <div className="mt-3">
+                <DataStateNotice
+                  id="exercise-state-notice"
+                  state={psiState}
+                  upstreamStatus={psiUpstreamStatus}
+                  customContext="MOH / NEA Outdoor Exercise Health Guidance"
+                  onRetry={fetchPsi}
+                />
+              </div>
+
+              {psiState === 'success' && psiData && (
+                <div className="mt-4 flex items-center justify-between">
+                  <div>
+                    <div className="text-lg sm:text-xl font-black tracking-tight flex items-center gap-2">
+                      {psiData.exerciseAllowed ? (
+                        <span className="text-emerald-700 flex items-center gap-1.5">
+                          <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                          Yes, Safe to Exercise Outdoors
+                        </span>
+                      ) : (
+                        <span className="text-amber-700 flex items-center gap-1.5">
+                          <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+                          Caution: Reduce Outdoor Exertion
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">
+                      {psiData.exerciseRecommendation}
+                    </p>
+                    <p className="text-[11px] text-slate-500 mt-1.5">
+                      {psiData.category === 'Good' || psiData.category === 'Moderate'
+                        ? 'Regular outdoor workouts, cycling & jogging along Sengkang Riverside Park can proceed.'
+                        : 'Vulnerable individuals (elderly, pregnant, children, heart/lung conditions) should stay indoors.'}
+                    </p>
+                  </div>
+                  <div className="p-3 rounded-2xl bg-amber-50/70 border border-amber-200/50 shrink-0">
+                    <Activity className="w-10 h-10 text-amber-600" />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Advisory Timestamp */}
+            {psiData && (
+              <div className="pt-3 border-t border-slate-100 flex flex-col gap-1 text-[11px] text-slate-500">
+                <div className="flex items-center gap-1.5">
+                  <HeartPulse className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                  <span>Public Health Exercise Advisory</span>
+                </div>
+                <div className="text-[10px] text-slate-400">
+                  Target: OLA EC Residents & Outdoor Recreation • Status: {psiData.shortAdvice}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </section>
 
       {/* Activity Recommendations Section (Rule-based based on official weather) */}
