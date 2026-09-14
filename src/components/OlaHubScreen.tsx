@@ -153,7 +153,7 @@ export const OlaHubScreen: React.FC = () => {
         </div>
       </div>
 
-      {/* 1. Logged-in Resident Interface Banner (Initials: OJ) */}
+      {/* 1. Logged-in Resident Interface Banner (Initials: JO) */}
       <ResidentProfileCard
         resident={currentUser}
         onOpenNewPost={() => setIsNewPostOpen(true)}
@@ -398,7 +398,7 @@ export const OlaHubScreen: React.FC = () => {
                         </p>
                       )}
 
-                      {/* Reply Box as OJ */}
+                      {/* Reply Box as resident */}
                       <div className="flex items-center gap-2 pt-2">
                         <input
                           type="text"

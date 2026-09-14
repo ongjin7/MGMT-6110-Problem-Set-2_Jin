@@ -1,8 +1,8 @@
 import { ForumPost, HomeBakeryListing, ResidentUser } from '../types';
 
 export const CURRENT_RESIDENT: ResidentUser = {
-  name: 'Ong Jin',
-  initials: 'OJ',
+  name: 'Jack Ong',
+  initials: 'JO',
   unit: '#12-04',
   block: 'Tower 3 (Blk 74)',
   isVerified: true,
@@ -29,8 +29,8 @@ export const INITIAL_FORUM_POSTS: ForumPost[] = [
     comments: [
       {
         id: 'c1',
-        authorName: 'Ong Jin',
-        authorInitials: 'OJ',
+        authorName: 'Jack Ong',
+        authorInitials: 'JO',
         authorUnit: 'Tower 3 #12-04',
         content: 'Hi Marcus, do you do Sunday 8 AM morning slots for adults? Drop me a message!',
         createdAt: '1 hour ago',
@@ -40,7 +40,7 @@ export const INITIAL_FORUM_POSTS: ForumPost[] = [
         authorName: 'Marcus Tan',
         authorInitials: 'MT',
         authorUnit: 'Tower 1 #08-02',
-        content: 'Hi Jin! Yes, Sunday 8 AM is available. I will ping you on Telegram!',
+        content: 'Hi Jack! Yes, Sunday 8 AM is available. I will ping you on Telegram!',
         createdAt: '45 mins ago',
       },
     ],
@@ -94,14 +94,14 @@ export const INITIAL_FORUM_POSTS: ForumPost[] = [
     title: 'Giveaway: BabyBjörn Bouncer (Bliss Cotton Anthracite) - Great Condition',
     content:
       'Giving away our baby bouncer as our toddler has outgrown it. Cleaned, freshly laundered fabric cover, pet-free and smoke-free unit. Free to any expecting or new parents at OLA. Self-collect at Tower 3 lift lobby!',
-    authorName: 'Ong Jin (OJ)',
-    authorInitials: 'OJ',
+    authorName: 'Jack Ong (JO)',
+    authorInitials: 'JO',
     authorUnit: 'Tower 3 #12-04',
     isCurrentUser: true,
     createdAt: 'Yesterday',
     likesCount: 19,
     commentsCount: 4,
-    contactMethod: 'Chat via OLA Hub or Telegram @ongjin',
+    contactMethod: 'Chat via OLA Hub or Telegram @jackong',
     tags: ['Free Giveaway', 'Baby Gear', 'Tower 3'],
     price: 'Free Giveaway',
   },

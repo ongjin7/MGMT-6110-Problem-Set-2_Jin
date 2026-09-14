@@ -32,16 +32,16 @@ export const Header: React.FC<HeaderProps> = ({
 
             {/* Right side controls on mobile */}
             <div className="flex items-center gap-2 md:hidden">
-              {/* Resident OJ badge on mobile */}
+              {/* Resident badge on mobile */}
               <div
                 id="header-resident-badge-mobile"
-                className="flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-bold border border-teal-200 bg-teal-50 text-teal-900"
-                title="Logged in as Ong Jin (Unit #12-04)"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border border-teal-200 bg-teal-50 text-teal-900"
+                title="Logged in as Jack Ong"
               >
                 <span className="w-5 h-5 rounded-full bg-teal-700 text-white font-black text-[10px] flex items-center justify-center">
-                  OJ
+                  JO
                 </span>
-                <span className="text-[11px] font-semibold text-slate-800">#12-04</span>
+                <span className="text-[11px] font-semibold text-slate-800">Jack Ong</span>
                 <ShieldCheck className="w-3 h-3 text-emerald-600" />
               </div>
 
@@ -162,25 +162,20 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           </nav>
 
-          {/* Desktop Right Side: Logged-in Resident (OJ) & Health */}
+          {/* Desktop Right Side: Logged-in Resident & Health */}
           <div className="hidden md:flex items-center gap-2.5">
-            {/* Resident Profile Indicator (Initials OJ) */}
+            {/* Resident Profile Indicator */}
             <div
               id="header-resident-badge-desktop"
-              className="flex items-center gap-2 pl-2 pr-3 py-1 rounded-xl border border-teal-200/80 bg-teal-50/70 text-slate-800 shadow-2xs"
-              title="Logged in as verified OLA resident Ong Jin (Tower 3 #12-04)"
+              className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl border border-teal-200/80 bg-teal-50/70 text-slate-800 shadow-2xs"
+              title="Logged in as verified OLA resident Jack Ong"
             >
               <div className="w-6 h-6 rounded-lg bg-gradient-to-tr from-teal-600 to-emerald-500 text-white font-black text-[11px] flex items-center justify-center shadow-xs">
-                OJ
+                JO
               </div>
-              <div className="flex flex-col text-left">
-                <div className="flex items-center gap-1 leading-tight">
-                  <span className="text-xs font-bold text-slate-900">Ong Jin</span>
-                  <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                </div>
-                <span className="text-[10px] text-teal-800 font-medium">
-                  #12-04 • Resident
-                </span>
+              <div className="flex items-center gap-1.5 leading-tight">
+                <span className="text-xs font-bold text-slate-900">Jack Ong</span>
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
               </div>
             </div>
 
