@@ -1,0 +1,6 @@
+{
+  "name": "OLA Buddy",
+  "description": "Resident companion app for OLA Executive Condominium (S544651) featuring Singapore directions, nearby public transport, live bus arrivals, and Sengkang weather and activity recommendations.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
