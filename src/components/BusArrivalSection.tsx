@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { BusStopItem, TrainStationItem, BusServiceArrival, BusRouteStop, FetchState } from '../types';
 import { DataStateNotice } from './DataStateNotice';
+import { StationRouteDetails } from './StationRouteDetails';
+import { STATION_ROUTE_DETAILS } from '../data/trainStationRoutes';
 import { Bus, Train, Clock, Users, Accessibility, ArrowRight, X, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 interface BusArrivalSectionProps {
@@ -25,6 +27,13 @@ export const BusArrivalSection: React.FC<BusArrivalSectionProps> = ({
   const [routeState, setRouteState] = useState<FetchState>('idle');
   const [routeUpstreamStatus, setRouteUpstreamStatus] = useState<number | null>(null);
   const [routeStops, setRouteStops] = useState<BusRouteStop[]>([]);
+
+  // Train station route details view state (hover or click)
+  const [selectedStationCode, setSelectedStationCode] = useState<string | null>(null);
+  const [hoveredStationCode, setHoveredStationCode] = useState<string | null>(null);
+
+  const activeStationCode = hoveredStationCode || selectedStationCode;
+  const activeStationDetail = activeStationCode ? STATION_ROUTE_DETAILS[activeStationCode] : null;
 
   // When selectedBusStopCode changes, fetch live arrivals from /api/bus
   useEffect(() => {
@@ -156,35 +165,106 @@ export const BusArrivalSection: React.FC<BusArrivalSectionProps> = ({
       </div>
 
       {/* Train Stations Overview (LRT & MRT) */}
-      <div id="nearby-train-stations-list" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        {nearbyTrainStations.map(station => (
-          <div
-            key={station.code}
-            className="p-3.5 rounded-xl border border-slate-200 bg-white shadow-2xs hover:border-teal-300 transition-colors"
-          >
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-2">
-                <div className={`p-1.5 rounded-lg ${station.type.includes('MRT') ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-700'}`}>
-                  <Train className="w-4 h-4" />
-                </div>
-                <div>
-                  <span className="text-xs font-mono font-bold text-teal-700 block">
-                    {station.code}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
+            4 Nearest LRT & MRT Stations to OLA EC
+          </label>
+          <span className="text-[11px] text-teal-700 font-semibold hidden sm:inline">
+            Hover or click station for route details
+          </span>
+        </div>
+
+        <div id="nearby-train-stations-list" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {nearbyTrainStations.map(station => {
+            const isMRT = station.type.includes('MRT');
+            const isActive = activeStationCode === station.code;
+            const isPinned = selectedStationCode === station.code;
+
+            return (
+              <button
+                key={station.code}
+                type="button"
+                onClick={() =>
+                  setSelectedStationCode(prev => (prev === station.code ? null : station.code))
+                }
+                onMouseEnter={() => setHoveredStationCode(station.code)}
+                onMouseLeave={() => setHoveredStationCode(null)}
+                className={`p-3.5 rounded-xl text-left border transition-all cursor-pointer relative group ${
+                  isActive
+                    ? isMRT
+                      ? 'border-purple-500 bg-purple-50/40 ring-2 ring-purple-400/40 shadow-sm'
+                      : 'border-teal-500 bg-teal-50/40 ring-2 ring-teal-400/40 shadow-sm'
+                    : 'border-slate-200 bg-white hover:border-teal-300 hover:bg-slate-50/70 shadow-2xs'
+                }`}
+                aria-label={`View route details for ${station.name}`}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-2">
+                    <div
+                      className={`p-1.5 rounded-lg ${
+                        isMRT ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-700'
+                      }`}
+                    >
+                      <Train className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="text-xs font-mono font-bold text-teal-700 block">
+                        {station.code}
+                      </span>
+                      <h3 className="text-sm font-bold text-slate-900 leading-tight">
+                        {station.name}
+                      </h3>
+                    </div>
+                  </div>
+                  <span className="text-[11px] font-semibold text-slate-500 bg-slate-50 px-2 py-0.5 rounded border border-slate-200 shrink-0">
+                    {station.distanceM}m
                   </span>
-                  <h3 className="text-sm font-bold text-slate-900 leading-tight">
-                    {station.name}
-                  </h3>
                 </div>
-              </div>
-              <span className="text-[11px] font-semibold text-slate-500 bg-slate-50 px-2 py-0.5 rounded border border-slate-200">
-                {station.distanceM}m
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-500 mt-2">
-              {station.line}
-            </p>
-          </div>
-        ))}
+                <p className="text-[11px] text-slate-500 mt-2 line-clamp-1">
+                  {station.line}
+                </p>
+
+                <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                  <span
+                    className={`font-semibold transition-colors ${
+                      isActive
+                        ? isMRT
+                          ? 'text-purple-700'
+                          : 'text-teal-700'
+                        : 'text-slate-400 group-hover:text-teal-700'
+                    }`}
+                  >
+                    {isActive
+                      ? isPinned
+                        ? 'Route Details (Pinned)'
+                        : 'Viewing Route Details'
+                      : 'Click to pin Route Details'}
+                  </span>
+                  <ArrowRight
+                    className={`w-3.5 h-3.5 transition-transform ${
+                      isActive
+                        ? 'translate-x-0.5 text-teal-600'
+                        : 'text-slate-300 group-hover:text-teal-600 group-hover:translate-x-0.5'
+                    }`}
+                  />
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Display LRT & MRT Route Details on hover or click */}
+        {activeStationDetail && (
+          <StationRouteDetails
+            stationDetail={activeStationDetail}
+            isPinned={selectedStationCode === activeStationDetail.stationCode}
+            onClose={() => {
+              setSelectedStationCode(null);
+              setHoveredStationCode(null);
+            }}
+          />
+        )}
       </div>
 
       {/* Bus Stop Selector Tabs */}

@@ -235,12 +235,27 @@ export const DirectionsScreen: React.FC<DirectionsScreenProps> = ({
 
   const [selectedBusStopCode, setSelectedBusStopCode] = useState<string>('67429');
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchWrapperRef = useRef<HTMLDivElement>(null);
+  const isSelectingRef = useRef<boolean>(false);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchWrapperRef.current && !searchWrapperRef.current.contains(e.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // If initialDestination passed, set it
   useEffect(() => {
     if (initialDestination) {
+      isSelectingRef.current = true;
       setSelectedDestination(initialDestination);
       setSearchTerm(initialDestination.name);
+      setIsDropdownOpen(false);
     }
   }, [initialDestination]);
 
@@ -248,9 +263,13 @@ export const DirectionsScreen: React.FC<DirectionsScreenProps> = ({
   const handleSearch = async (term: string, autoSelectFirst: boolean = false) => {
     if (!term || term.trim() === '') return;
 
+    if (autoSelectFirst) {
+      setIsDropdownOpen(false);
+    } else {
+      setIsDropdownOpen(true);
+    }
     setSearchState('loading');
     setSearchUpstreamStatus(null);
-    setIsDropdownOpen(true);
 
     try {
       const res = await fetch(`/api/onemap-search?searchVal=${encodeURIComponent(term)}`);
@@ -261,6 +280,7 @@ export const DirectionsScreen: React.FC<DirectionsScreenProps> = ({
         } else {
           setSearchState('unreachable');
         }
+        if (!autoSelectFirst) setIsDropdownOpen(true);
         return;
       }
 
@@ -268,32 +288,47 @@ export const DirectionsScreen: React.FC<DirectionsScreenProps> = ({
       if (!data.results || data.results.length === 0) {
         setSearchResults([]);
         setSearchState('empty');
+        if (!autoSelectFirst) setIsDropdownOpen(true);
       } else {
         setSearchResults(data.results);
         setSearchState('success');
         if (autoSelectFirst && data.results.length > 0) {
           handleSelectLocation(data.results[0]);
+        } else if (!autoSelectFirst) {
+          setIsDropdownOpen(true);
         }
       }
     } catch (err) {
       setSearchState('unreachable');
+      if (!autoSelectFirst) setIsDropdownOpen(true);
     }
   };
 
   // Debounced search when user types 3+ chars
   useEffect(() => {
+    if (isSelectingRef.current) {
+      isSelectingRef.current = false;
+      return;
+    }
+
+    if (selectedDestination && searchTerm.trim().toLowerCase() === selectedDestination.name.trim().toLowerCase()) {
+      setIsDropdownOpen(false);
+      return;
+    }
+
     if (searchTerm.trim().length < 3) {
       setSearchResults([]);
       setSearchState('idle');
+      setIsDropdownOpen(false);
       return;
     }
 
     const timer = setTimeout(() => {
-      handleSearch(searchTerm);
+      handleSearch(searchTerm, false);
     }, 450);
 
     return () => clearTimeout(timer);
-  }, [searchTerm]);
+  }, [searchTerm, selectedDestination]);
 
   // Calculate Route whenever selectedDestination or travelMode changes
   useEffect(() => {
@@ -356,9 +391,12 @@ export const DirectionsScreen: React.FC<DirectionsScreenProps> = ({
 
   // Select a destination from dropdown
   const handleSelectLocation = (loc: LocationItem) => {
+    isSelectingRef.current = true;
     setSelectedDestination(loc);
     setSearchTerm(loc.name);
     setIsDropdownOpen(false);
+    setSearchResults([]);
+    setSearchState('idle');
   };
 
   // Estimate distance and travel time based on coordinates if routing upstream is pending credentials
@@ -414,7 +452,7 @@ export const DirectionsScreen: React.FC<DirectionsScreenProps> = ({
         </div>
 
         {/* Destination Search Box */}
-        <div className="relative" id="destination-search-wrapper">
+        <div className="relative" id="destination-search-wrapper" ref={searchWrapperRef}>
           <div className="p-4 sm:p-5 rounded-2xl border border-slate-200 bg-white shadow-xs space-y-3">
             <label
               htmlFor="destination-search-input"
@@ -430,7 +468,10 @@ export const DirectionsScreen: React.FC<DirectionsScreenProps> = ({
                 id="destination-search-input"
                 type="text"
                 value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
+                onChange={e => {
+                  isSelectingRef.current = false;
+                  setSearchTerm(e.target.value);
+                }}
                 onKeyDown={e => {
                   if (e.key === 'Enter') {
                     e.preventDefault();
@@ -438,7 +479,14 @@ export const DirectionsScreen: React.FC<DirectionsScreenProps> = ({
                   }
                 }}
                 onFocus={() => {
-                  if (searchResults.length > 0) setIsDropdownOpen(true);
+                  if (
+                    searchResults.length > 0 &&
+                    (!selectedDestination ||
+                      searchTerm.trim().toLowerCase() !==
+                        selectedDestination.name.trim().toLowerCase())
+                  ) {
+                    setIsDropdownOpen(true);
+                  }
                 }}
                 placeholder="Search any Singapore destination, building, MRT or postal code..."
                 className="w-full pl-11 pr-24 py-3 rounded-xl border border-slate-300 focus:border-teal-600 focus:ring-2 focus:ring-teal-100 outline-hidden text-sm sm:text-base text-slate-900 transition-all placeholder:text-slate-400"
@@ -463,9 +511,11 @@ export const DirectionsScreen: React.FC<DirectionsScreenProps> = ({
                   key={q.name}
                   type="button"
                   onClick={() => {
+                    isSelectingRef.current = true;
                     setSearchTerm(q.name);
                     setSelectedDestination(q.location);
                     setIsDropdownOpen(false);
+                    setSearchResults([]);
                     setSearchState('idle');
                   }}
                   className="px-2.5 py-1 rounded-lg text-xs bg-slate-100 hover:bg-teal-50 hover:text-teal-800 text-slate-700 border border-slate-200/70 transition-colors cursor-pointer"
