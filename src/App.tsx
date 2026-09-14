@@ -3,6 +3,7 @@ import { AppScreen, SystemHealth, LocationItem } from './types';
 import { Header } from './components/Header';
 import { DirectionsScreen } from './components/DirectionsScreen';
 import { WeatherScreen } from './components/WeatherScreen';
+import { OlaHubScreen } from './components/OlaHubScreen';
 import { HealthModal } from './components/HealthModal';
 import { Footer } from './components/Footer';
 
@@ -51,11 +52,13 @@ export default function App() {
 
       {/* Main Screen Content */}
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 pt-6 sm:pt-8">
-        {currentScreen === 'directions' ? (
+        {currentScreen === 'directions' && (
           <DirectionsScreen initialDestination={preselectedDestination} />
-        ) : (
+        )}
+        {currentScreen === 'weather' && (
           <WeatherScreen onSelectPlaceForDirections={handleSelectPlaceForDirections} />
         )}
+        {currentScreen === 'hub' && <OlaHubScreen />}
       </main>
 
       {/* Diagnostics Health Modal */}

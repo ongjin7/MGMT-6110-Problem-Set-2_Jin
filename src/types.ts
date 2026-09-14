@@ -1,4 +1,67 @@
-export type AppScreen = 'directions' | 'weather';
+export type AppScreen = 'directions' | 'weather' | 'hub';
+
+export type ForumCategory =
+  | 'all'
+  | 'lost_found'
+  | 'recommendations'
+  | 'events'
+  | 'marketplace'
+  | 'expertise';
+
+export interface ForumPost {
+  id: string;
+  category: 'lost_found' | 'recommendations' | 'events' | 'marketplace' | 'expertise';
+  categoryLabel: string;
+  title: string;
+  content: string;
+  authorName: string;
+  authorInitials: string;
+  authorUnit: string;
+  isCurrentUser?: boolean;
+  createdAt: string;
+  likesCount: number;
+  commentsCount: number;
+  comments?: Array<{
+    id: string;
+    authorName: string;
+    authorInitials: string;
+    authorUnit: string;
+    content: string;
+    createdAt: string;
+  }>;
+  contactMethod?: string;
+  tags?: string[];
+  photoUrl?: string;
+  badge?: string;
+  price?: string;
+}
+
+export interface HomeBakeryListing {
+  id: string;
+  businessName: string;
+  sellerName: string;
+  sellerInitials: string;
+  sellerUnit: string;
+  whatTheySell: string;
+  itemsSummary: string[];
+  photos: string[];
+  priceRange: string;
+  pickupDeliveryDetails: string;
+  operatingDays: string;
+  contactMethod: string;
+  isResidentRun: boolean; // Always true for "Resident-run" badge
+  specialtyHighlight?: string;
+  instagramOrHandle?: string;
+}
+
+export interface ResidentUser {
+  name: string;
+  initials: string;
+  unit: string;
+  block: string;
+  isVerified: boolean;
+  role: string;
+}
 
 export type TravelMode = 'pt' | 'walk' | 'drive' | 'cycle';
 

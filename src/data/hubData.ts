@@ -1,0 +1,231 @@
+import { ForumPost, HomeBakeryListing, ResidentUser } from '../types';
+
+export const CURRENT_RESIDENT: ResidentUser = {
+  name: 'Ong Jin',
+  initials: 'OJ',
+  unit: '#12-04',
+  block: 'Tower 3 (Blk 74)',
+  isVerified: true,
+  role: 'Verified Resident',
+};
+
+export const INITIAL_FORUM_POSTS: ForumPost[] = [
+  {
+    id: 'post-1',
+    category: 'expertise',
+    categoryLabel: 'Resident Expertise',
+    title: 'Certified PTR Tennis Coach: Weekend Lessons at OLA EC Tennis Court',
+    content:
+      'Hi neighbours! I am a certified PTR tennis coach living at Tower 1. Offering private (1-on-1) and small group (1-on-2) tennis lessons right at our condo tennis court. Suitable for complete beginners to intermediate players looking to refine their forehand and footwork. Rackets and practice balls provided if needed!',
+    authorName: 'Marcus Tan',
+    authorInitials: 'MT',
+    authorUnit: 'Tower 1 #08-02',
+    createdAt: '2 hours ago',
+    likesCount: 14,
+    commentsCount: 5,
+    contactMethod: 'WhatsApp 9123 7890 / Telegram @coachmarcustan',
+    tags: ['Tennis', 'Coaching', 'Sports', 'Fitness'],
+    price: '$70/hr (Resident special)',
+    comments: [
+      {
+        id: 'c1',
+        authorName: 'Ong Jin',
+        authorInitials: 'OJ',
+        authorUnit: 'Tower 3 #12-04',
+        content: 'Hi Marcus, do you do Sunday 8 AM morning slots for adults? Drop me a message!',
+        createdAt: '1 hour ago',
+      },
+      {
+        id: 'c2',
+        authorName: 'Marcus Tan',
+        authorInitials: 'MT',
+        authorUnit: 'Tower 1 #08-02',
+        content: 'Hi Jin! Yes, Sunday 8 AM is available. I will ping you on Telegram!',
+        createdAt: '45 mins ago',
+      },
+    ],
+  },
+  {
+    id: 'post-2',
+    category: 'lost_found',
+    categoryLabel: 'Lost & Found',
+    title: 'Found: Kids Blue Spiderman Water Bottle near Kids Pool Deck',
+    content:
+      'Found a blue Thermos kids water bottle with Spiderman print left on the wooden lounge chair near the 50m lap pool / kids splash deck this evening around 6:30 PM. Have handed it over to the Security Guardhouse for safe keeping, or let me know if it belongs to your child!',
+    authorName: 'Serene Koh',
+    authorInitials: 'SK',
+    authorUnit: 'Tower 5 #06-03',
+    createdAt: '4 hours ago',
+    likesCount: 8,
+    commentsCount: 2,
+    badge: 'Safekeeping at Guardhouse',
+    tags: ['Lost & Found', 'Pool Deck', 'Guardhouse'],
+    comments: [
+      {
+        id: 'c3',
+        authorName: 'Brenda Goh',
+        authorInitials: 'BG',
+        authorUnit: 'Tower 5 #04-01',
+        content: 'Oh that is my son Lucas! Thank you so much Serene, will collect from security.',
+        createdAt: '3 hours ago',
+      },
+    ],
+  },
+  {
+    id: 'post-3',
+    category: 'recommendations',
+    categoryLabel: 'Neighbour Recommendation',
+    title: 'Reliable aircon servicing contractor recommendation (did chemical wash for OLA)',
+    content:
+      'Sharing a great aircon servicing contact for anyone needing pre-monsoon chemical overhaul or regular servicing. Mr. Lim (CoolBreeze SG) has serviced multiple units in OLA. Extremely punctual, uses protective tarpaulin sheeting, no water dripping, and vacuumed the drainage pipes thoroughly. $120 for 3 units regular service.',
+    authorName: 'David Wong',
+    authorInitials: 'DW',
+    authorUnit: 'Tower 6 #14-01',
+    createdAt: 'Yesterday',
+    likesCount: 27,
+    commentsCount: 7,
+    contactMethod: 'Contact: Mr. Lim 9876 5412 (Mention OLA resident)',
+    tags: ['Aircon Servicing', 'Home Maintenance', 'Recommended'],
+  },
+  {
+    id: 'post-4',
+    category: 'marketplace',
+    categoryLabel: 'Buy / Sell / Giveaway',
+    title: 'Giveaway: BabyBjörn Bouncer (Bliss Cotton Anthracite) - Great Condition',
+    content:
+      'Giving away our baby bouncer as our toddler has outgrown it. Cleaned, freshly laundered fabric cover, pet-free and smoke-free unit. Free to any expecting or new parents at OLA. Self-collect at Tower 3 lift lobby!',
+    authorName: 'Ong Jin (OJ)',
+    authorInitials: 'OJ',
+    authorUnit: 'Tower 3 #12-04',
+    isCurrentUser: true,
+    createdAt: 'Yesterday',
+    likesCount: 19,
+    commentsCount: 4,
+    contactMethod: 'Chat via OLA Hub or Telegram @ongjin',
+    tags: ['Free Giveaway', 'Baby Gear', 'Tower 3'],
+    price: 'Free Giveaway',
+  },
+  {
+    id: 'post-5',
+    category: 'events',
+    categoryLabel: 'Community Event',
+    title: 'Sunday Casual Board Games Gathering @ OLA Clubhouse Function Room 1',
+    content:
+      'Calling all tabletop and board game fans! Setting up a casual board games session this Sunday 3:30 PM – 6:30 PM at Clubhouse Function Room 1. We have Settlers of Catan, Wingspan, Ticket to Ride, and Exploding Kittens. Beginners very welcome, snacks and tea provided. Come meet fellow neighbours!',
+    authorName: 'Kevin & Samantha',
+    authorInitials: 'KS',
+    authorUnit: 'Tower 2 #10-05',
+    createdAt: '2 days ago',
+    likesCount: 22,
+    commentsCount: 9,
+    contactMethod: 'RSVP via Telegram group @olabuzz',
+    tags: ['Board Games', 'Clubhouse', 'Sunday Gathering', 'All Ages'],
+  },
+];
+
+export const INITIAL_HOME_BAKERIES: HomeBakeryListing[] = [
+  {
+    id: 'bakery-1',
+    businessName: 'The Sourdough Nook @ OLA',
+    sellerName: 'Clara & Eugene',
+    sellerInitials: 'CE',
+    sellerUnit: 'Tower 2 #11-03',
+    whatTheySell:
+      'Artisanal 36-hour slow-fermented country sourdough loaves, roasted garlic rosemary focaccia, and cinnamon-cardamom brioche knots.',
+    itemsSummary: [
+      'Signature Country Sourdough Loaf ($12)',
+      'Rosemary Sea Salt Olive Oil Focaccia ($14)',
+      'Swedish Cardamom & Cinnamon Buns (Box of 4 - $16)',
+    ],
+    photos: [
+      'https://images.unsplash.com/photo-1589367920969-ab8e050bbb04?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=800&q=80',
+    ],
+    priceRange: '$12 – $16',
+    pickupDeliveryDetails:
+      'Self-pickup at Tower 2 Lift Lobby (Free) or doorstep drop to your OLA unit. Freshly baked and warm out of the oven every morning.',
+    operatingDays: 'Friday, Saturday & Sunday (Orders close Wednesday 10 PM)',
+    contactMethod: 'WhatsApp 9234 1188 / IG @thesourdoughnook.ola',
+    instagramOrHandle: '@thesourdoughnook.ola',
+    isResidentRun: true,
+    specialtyHighlight: '100% Organic Stoneground Flour • Zero Commercial Yeast',
+  },
+  {
+    id: 'bakery-2',
+    businessName: 'Anchorvale Sweet Crafters',
+    sellerName: 'Valerie Tan',
+    sellerInitials: 'VT',
+    sellerUnit: 'Tower 5 #07-04',
+    whatTheySell:
+      'Rich molten Basque burnt cheesecakes, delicate French macarons with seasonal ganache, and Japanese Uji matcha sponge rolls.',
+    itemsSummary: [
+      '6-inch Molten Basque Burnt Cheesecake ($36)',
+      'French Macarons Assorted Box of 6 ($18)',
+      'Kyoto Uji Matcha Roll Cake ($24)',
+    ],
+    photos: [
+      'https://images.unsplash.com/photo-1533134242443-d4fd215305ad?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1569864358642-9d1684040f43?auto=format&fit=crop&w=800&q=80',
+    ],
+    priceRange: '$18 – $36',
+    pickupDeliveryDetails:
+      'Contactless collection at Tower 5 Ground Floor lobby or scheduled evening doorstep drop. Pre-order 2 days in advance.',
+    operatingDays: 'Wednesday to Sunday (11:00 AM – 7:30 PM)',
+    contactMethod: 'WhatsApp 8112 3456 / IG @sweetcrafters.sg',
+    instagramOrHandle: '@sweetcrafters.sg',
+    isResidentRun: true,
+    specialtyHighlight: 'French Elle & Vire Cream & Pure Uji Matcha',
+  },
+  {
+    id: 'bakery-3',
+    businessName: 'Kopi & Canelé Micro-Roastery',
+    sellerName: 'Darren & Cheryl',
+    sellerInitials: 'DC',
+    sellerUnit: 'Tower 4 #09-02',
+    whatTheySell:
+      'Freshly pulled single-origin espresso drinks, steeped 18-hour cold brew bottles, and authentic Bordeaux vanilla rum canelés with crunchy caramelized shells.',
+    itemsSummary: [
+      'Bordeaux Vanilla Bean Canelés (Box of 4 - $16)',
+      'Single-Origin Cold Brew Coffee (330ml glass bottle - $6)',
+      'House-Roasted Ethiopian Yirgacheffe Beans 250g ($18)',
+    ],
+    photos: [
+      'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1509785307050-d4066910ec1e?auto=format&fit=crop&w=800&q=80',
+    ],
+    priceRange: '$6 – $18',
+    pickupDeliveryDetails:
+      'Morning doorstep delivery between 7:30 AM – 9:00 AM (perfect for your work-from-home coffee kick) or Tower 4 lobby pickup.',
+    operatingDays: 'Tuesday to Sunday mornings (7:30 AM – 11:30 AM)',
+    contactMethod: 'Telegram @kopicanele_ola / Phone 9655 4321',
+    instagramOrHandle: '@kopicanele_ola',
+    isResidentRun: true,
+    specialtyHighlight: 'Small-batch roasted coffee & copper-mould canelés',
+  },
+  {
+    id: 'bakery-4',
+    businessName: 'Flour & Whisk NY Bakes',
+    sellerName: 'Amanda Lin',
+    sellerInitials: 'AL',
+    sellerUnit: 'Tower 7 #15-02',
+    whatTheySell:
+      'Thick, chunky New York style cookies with gooey centres and Valrhona dark chocolate fudge brownies.',
+    itemsSummary: [
+      'Sea Salt Dark Chocolate Walnut Cookie ($5.50 / Box of 4 $20)',
+      'Red Velvet Cream Cheese Stuffed Cookie ($6.00)',
+      'Valrhona Triple Fudge Brownie Box ($22)',
+    ],
+    photos: [
+      'https://images.unsplash.com/photo-1499636136210-6f4ee915583e?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1606313564200-e75d5e30476c?auto=format&fit=crop&w=800&q=80',
+    ],
+    priceRange: '$5.50 – $22',
+    pickupDeliveryDetails:
+      'Tower 7 lobby drop-off or doorstep delivery to any OLA unit. Fresh bakes restocked every Saturday noon.',
+    operatingDays: 'Saturdays, Sundays & Public Holidays (10:00 AM – 6:00 PM)',
+    contactMethod: 'WhatsApp 9888 2345 / IG @flourandwhisk.sg',
+    instagramOrHandle: '@flourandwhisk.sg',
+    isResidentRun: true,
+    specialtyHighlight: 'Made with French Grass-Fed Butter & 70% Valrhona Dark Choc',
+  },
+];
