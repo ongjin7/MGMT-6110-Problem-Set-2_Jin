@@ -33,11 +33,17 @@ export default function App() {
     fetchHealth();
   }, []);
 
+  // Ensure view resets to the top whenever switching screens
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [currentScreen]);
+
   // Handle switching from Weather Screen activity recommendation directly to Directions
   const handleSelectPlaceForDirections = (place: LocationItem) => {
     setPreselectedDestination(place);
     setCurrentScreen('directions');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   return (
@@ -45,7 +51,10 @@ export default function App() {
       {/* Header */}
       <Header
         currentScreen={currentScreen}
-        onScreenChange={screen => setCurrentScreen(screen)}
+        onScreenChange={screen => {
+          setCurrentScreen(screen);
+          window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+        }}
         systemHealth={systemHealth}
         onOpenHealth={() => setIsHealthModalOpen(true)}
       />

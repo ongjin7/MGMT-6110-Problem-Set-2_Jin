@@ -68,7 +68,7 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Sophisticated Segmented Screen Filter */}
           <nav
             id="ola-screen-tabs"
-            className="relative flex items-center p-1 bg-slate-100/90 rounded-2xl border border-slate-200/80 shadow-inner w-full sm:w-auto justify-center gap-0.5"
+            className="relative flex items-center p-1 bg-slate-100/90 rounded-2xl border border-slate-200/80 shadow-inner w-full sm:w-auto justify-center gap-0.5 max-w-full"
             aria-label="Screen Navigation"
           >
             {/* Screen 1: Directions Tab */}
@@ -76,7 +76,7 @@ export const Header: React.FC<HeaderProps> = ({
               type="button"
               id="tab-directions"
               onClick={() => onScreenChange('directions')}
-              className={`relative flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-colors duration-200 cursor-pointer select-none z-10 ${
+              className={`relative flex-1 sm:flex-initial flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-colors duration-200 cursor-pointer select-none z-10 ${
                 currentScreen === 'directions'
                   ? 'text-slate-900 font-bold'
                   : 'text-slate-500 hover:text-slate-800'
@@ -98,7 +98,8 @@ export const Header: React.FC<HeaderProps> = ({
               >
                 <Navigation className="w-4 h-4" />
               </div>
-              <span className="tracking-tight whitespace-nowrap">Directions From OLA</span>
+              <span className="tracking-tight whitespace-nowrap hidden sm:inline">Directions From OLA</span>
+              <span className="tracking-tight whitespace-nowrap sm:hidden">Directions</span>
             </button>
 
             {/* Screen 2: Weather & Things To Do Tab */}
@@ -106,7 +107,7 @@ export const Header: React.FC<HeaderProps> = ({
               type="button"
               id="tab-weather"
               onClick={() => onScreenChange('weather')}
-              className={`relative flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-colors duration-200 cursor-pointer select-none z-10 ${
+              className={`relative flex-1 sm:flex-initial flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-colors duration-200 cursor-pointer select-none z-10 ${
                 currentScreen === 'weather'
                   ? 'text-slate-900 font-bold'
                   : 'text-slate-500 hover:text-slate-800'
@@ -128,7 +129,8 @@ export const Header: React.FC<HeaderProps> = ({
               >
                 <CloudSun className="w-4 h-4" />
               </div>
-              <span className="tracking-tight whitespace-nowrap">Weather & Activities</span>
+              <span className="tracking-tight whitespace-nowrap hidden sm:inline">Weather & Activities</span>
+              <span className="tracking-tight whitespace-nowrap sm:hidden">Weather</span>
             </button>
 
             {/* Screen 3: OLA Hub Tab */}
@@ -136,7 +138,7 @@ export const Header: React.FC<HeaderProps> = ({
               type="button"
               id="tab-hub"
               onClick={() => onScreenChange('hub')}
-              className={`relative flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-colors duration-200 cursor-pointer select-none z-10 ${
+              className={`relative flex-1 sm:flex-initial flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-colors duration-200 cursor-pointer select-none z-10 ${
                 currentScreen === 'hub'
                   ? 'text-slate-900 font-bold'
                   : 'text-slate-500 hover:text-slate-800'
