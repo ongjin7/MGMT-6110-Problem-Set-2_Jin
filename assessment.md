@@ -143,6 +143,17 @@ Without receiving any instructions:
 **Evidence:** I checked the GitHub repository and found no LTA or OneMap credentials, passwords, or access tokens exposed. The required secrets are stored only as Vercel environment variables, while the browser communicates with my own `/api/` serverless functions.
 ```
 ```
+### Back End Criteria 6. Cache duration matches how frequently each source changes
+
+**Why it matters:** OLA Buddy uses data that changes at very different speeds. Bus arrivals are highly time-sensitive, while weather, bus-stop and route data change much less frequently. Using the wrong cache duration can either show residents stale information or make unnecessary calls to the upstream API.
+
+**How to test it:** Inspect the Cache setting for each API endpoint and compare it with how frequently its upstream source actually updates.
+
+**Assessment:** Not Met
+
+**Evidence:** The app currently applies a 60-second cache broadly for simplicity rather than tailoring the cache duration to each data source. This means live bus arrivals may be older than necessary, while slower-changing data such as weather or route information may be requested more frequently than required. A better implementation would set a different cache duration for each endpoint based on its actual update frequency.
+```
+```
 ---
 ### Assess the collaboration, not the tool
 ```
