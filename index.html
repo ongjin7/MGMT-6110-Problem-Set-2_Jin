@@ -17,7 +17,6 @@
           (event.filename && (event.filename.indexOf('disqus') !== -1 || event.filename.indexOf('disquscdn') !== -1))
         ) {
           event.preventDefault();
-          event.stopImmediatePropagation();
           return true;
         }
       }, true);
