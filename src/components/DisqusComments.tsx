@@ -1,14 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { MessageSquareQuote, ShieldCheck, AlertCircle } from 'lucide-react';
-
-// ============================================================================
-// DISQUS CONFIGURATION SETTINGS
-// To change or update your Disqus thread details, update the values below:
-// ============================================================================
-export const DISQUS_SHORTNAME = 'jinong'; // Your Disqus site shortname registered at disqus.com
-export const DISQUS_PAGE_URL = 'https://mgmt-6110-problem-set-2-jin.vercel.app/'; // Canonical live site URL (HTTPS, no query string)
-export const DISQUS_PAGE_IDENTIFIER = 'home'; // Fixed thread identifier for the main feedback thread
-export const DISQUS_PAGE_TITLE = 'OLA Buddy - Resident Community Feedback';
+import React, { useEffect } from 'react';
+import { MessageSquareQuote, ShieldCheck } from 'lucide-react';
 
 declare global {
   interface Window {
@@ -21,76 +12,43 @@ declare global {
 }
 
 export const DisqusComments: React.FC = () => {
-  const [isConfigMissing, setIsConfigMissing] = useState(false);
-
   useEffect(() => {
-    // 1. Verify required shortname
-    if (!DISQUS_SHORTNAME || DISQUS_SHORTNAME.trim() === '') {
-      setIsConfigMissing(true);
-      return;
-    }
-    setIsConfigMissing(false);
+    const disqusShortname = 'jinong';
+    const disqusIdentifier = 'ola-buddy-feedback';
 
-    // 2. Build the official Disqus configuration function
+    // 1. Configure Disqus page parameters
     const configureDisqus = function (this: any) {
-      this.page = this.page || {};
-      this.page.url = DISQUS_PAGE_URL;
-      this.page.identifier = DISQUS_PAGE_IDENTIFIER;
-      this.page.title = DISQUS_PAGE_TITLE;
+      this.page.url = window.location.href;
+      this.page.identifier = disqusIdentifier;
     };
 
-    // 3. Set global variables according to official Disqus specifications
-    window.disqus_shortname = DISQUS_SHORTNAME;
+    // 2. Set global configuration
+    window.disqus_shortname = disqusShortname;
     window.disqus_config = configureDisqus;
 
     const scriptId = 'dsq-embed-scr';
-    const doc = document;
 
-    // Helper to safely reset or load the thread via official API
-    const initDisqusThread = () => {
-      if (window.DISQUS && typeof window.DISQUS.reset === 'function') {
-        try {
-          window.DISQUS.reset({
-            reload: true,
-            config: configureDisqus,
-          });
-        } catch (err) {
-          console.warn('Disqus reset error:', err);
-        }
-      }
-    };
-
-    // 4. Handle React lifecycle & SPA navigation:
-    // If DISQUS already exists on the window, reload the thread into the current container
-    if (window.DISQUS && doc.getElementById(scriptId)) {
-      initDisqusThread();
+    // 3. If Disqus is already loaded on the window (e.g. navigation / re-render), reset the instance
+    if (window.DISQUS && typeof window.DISQUS.reset === 'function') {
+      window.DISQUS.reset({
+        reload: true,
+        config: configureDisqus,
+      });
       return;
     }
 
-    // 5. If embed script tag is already in DOM (e.g. still downloading), attach load listener
-    let script = doc.getElementById(scriptId) as HTMLScriptElement | null;
-    if (script) {
-      script.addEventListener('load', initDisqusThread);
-      return () => {
-        script?.removeEventListener('load', initDisqusThread);
-      };
+    // 4. Prevent injecting duplicate script tags
+    if (document.getElementById(scriptId)) {
+      return;
     }
 
-    // 6. Otherwise inject the official Disqus embed script
-    script = doc.createElement('script');
-    script.id = scriptId;
-    script.src = `https://${DISQUS_SHORTNAME}.disqus.com/embed.js`;
-    script.setAttribute('data-timestamp', String(+new Date()));
-    script.async = true;
-    script.addEventListener('load', initDisqusThread);
-
-    (doc.head || doc.body).appendChild(script);
-
-    return () => {
-      if (script) {
-        script.removeEventListener('load', initDisqusThread);
-      }
-    };
+    // 5. Inject the embed script after component mounts
+    const s = document.createElement('script');
+    s.id = scriptId;
+    s.src = `https://${disqusShortname}.disqus.com/embed.js`;
+    s.setAttribute('data-timestamp', String(+new Date()));
+    s.async = true;
+    (document.head || document.body).appendChild(s);
   }, []);
 
   return (
@@ -126,21 +84,8 @@ export const DisqusComments: React.FC = () => {
           </p>
         </div>
 
-        {/* Configuration Notice (only rendered if shortname is omitted) */}
-        {isConfigMissing ? (
-          <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 text-xs text-amber-900 flex items-start gap-3">
-            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-semibold">Disqus Shortname Required</p>
-              <p className="mt-1 text-amber-800">
-                Please provide your Disqus shortname in <code className="bg-amber-100 px-1 py-0.5 rounded font-mono text-[11px]">src/components/DisqusComments.tsx</code> at <code className="bg-amber-100 px-1 py-0.5 rounded font-mono text-[11px]">DISQUS_SHORTNAME</code>.
-              </p>
-            </div>
-          </div>
-        ) : (
-          /* Official Disqus Comment Container */
-          <div id="disqus_thread" className="min-h-[240px]" />
-        )}
+        {/* Single canonical Disqus comment container */}
+        <div id="disqus_thread" className="min-h-[280px]" />
 
         <noscript>
           <p className="text-xs text-slate-500">
@@ -159,3 +104,4 @@ export const DisqusComments: React.FC = () => {
     </section>
   );
 };
+
