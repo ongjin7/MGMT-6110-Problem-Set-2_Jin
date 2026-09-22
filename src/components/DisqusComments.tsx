@@ -13,22 +13,22 @@ declare global {
 
 export const DisqusComments: React.FC = () => {
   useEffect(() => {
-    const disqusShortname = 'jinong';
-    const disqusIdentifier = 'ola-buddy-feedback';
+    const pageUrl = 'https://mgmt-6110-problem-set-2-jin.vercel.app/';
+    const pageIdentifier = 'ola-buddy-feedback';
 
     // 1. Configure Disqus page parameters
     const configureDisqus = function (this: any) {
-      this.page.url = window.location.href;
-      this.page.identifier = disqusIdentifier;
+      this.page.url = pageUrl;
+      this.page.identifier = pageIdentifier;
     };
 
-    // 2. Set global configuration
-    window.disqus_shortname = disqusShortname;
+    // 2. Set global configuration for Disqus
+    window.disqus_shortname = 'jinong';
     window.disqus_config = configureDisqus;
 
     const scriptId = 'dsq-embed-scr';
 
-    // 3. If Disqus is already loaded on the window (e.g. navigation / re-render), reset the instance
+    // 3. If Disqus is already loaded in the window, reset the thread
     if (window.DISQUS && typeof window.DISQUS.reset === 'function') {
       window.DISQUS.reset({
         reload: true,
@@ -37,18 +37,15 @@ export const DisqusComments: React.FC = () => {
       return;
     }
 
-    // 4. Prevent injecting duplicate script tags
-    if (document.getElementById(scriptId)) {
-      return;
+    // 4. Ensure the embed script is injected only once
+    if (!document.getElementById(scriptId)) {
+      const s = document.createElement('script');
+      s.id = scriptId;
+      s.src = 'https://jinong.disqus.com/embed.js';
+      s.setAttribute('data-timestamp', String(+new Date()));
+      s.async = true;
+      (document.head || document.body).appendChild(s);
     }
-
-    // 5. Inject the embed script after component mounts
-    const s = document.createElement('script');
-    s.id = scriptId;
-    s.src = `https://${disqusShortname}.disqus.com/embed.js`;
-    s.setAttribute('data-timestamp', String(+new Date()));
-    s.async = true;
-    (document.head || document.body).appendChild(s);
   }, []);
 
   return (
