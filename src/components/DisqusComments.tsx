@@ -13,6 +13,7 @@ declare global {
 
 export const DisqusComments: React.FC = () => {
   useEffect(() => {
+    // Canonical live site URL
     const pageUrl = 'https://mgmt-6110-problem-set-2-jin.vercel.app/';
     const pageIdentifier = 'ola-buddy-feedback';
 
