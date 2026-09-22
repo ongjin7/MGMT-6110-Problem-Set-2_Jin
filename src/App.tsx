@@ -4,6 +4,7 @@ import { Header } from './components/Header';
 import { DirectionsScreen } from './components/DirectionsScreen';
 import { WeatherScreen } from './components/WeatherScreen';
 import { OlaHubScreen } from './components/OlaHubScreen';
+import { DisqusComments } from './components/DisqusComments';
 import { HealthModal } from './components/HealthModal';
 import { Footer } from './components/Footer';
 
@@ -62,7 +63,10 @@ export default function App() {
       {/* Main Screen Content */}
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 pt-6 sm:pt-8">
         {currentScreen === 'directions' && (
-          <DirectionsScreen initialDestination={preselectedDestination} />
+          <>
+            <DirectionsScreen initialDestination={preselectedDestination} />
+            <DisqusComments />
+          </>
         )}
         {currentScreen === 'weather' && (
           <WeatherScreen onSelectPlaceForDirections={handleSelectPlaceForDirections} />

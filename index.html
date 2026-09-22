@@ -9,6 +9,28 @@
     <meta property="og:description" content="Resident companion app for OLA Executive Condominium (S544651) featuring Singapore directions, nearby public transport, live bus arrivals, Sengkang weather, and OLA Hub resident community forum & home bakeries." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
+    <script>
+      // Gracefully prevent unhandled cross-origin errors (e.g. Disqus or browser privacy extensions) from crashing applet
+      window.addEventListener('error', function(event) {
+        if (
+          event.message === 'Script error.' ||
+          (event.filename && (event.filename.indexOf('disqus') !== -1 || event.filename.indexOf('disquscdn') !== -1))
+        ) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          return true;
+        }
+      }, true);
+      window.addEventListener('unhandledrejection', function(event) {
+        if (
+          event.reason &&
+          (String(event.reason).indexOf('Script error') !== -1 || String(event.reason && event.reason.stack).indexOf('disqus') !== -1)
+        ) {
+          event.preventDefault();
+          return true;
+        }
+      });
+    </script>
   </head>
   <body>
     <div id="root"></div>
