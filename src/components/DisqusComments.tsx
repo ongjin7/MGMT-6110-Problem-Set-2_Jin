@@ -50,8 +50,31 @@ export const DisqusComments: React.FC = () => {
   }, []);
 
   return (
-    <section id="disqus-feedback-section" className="space-y-4 pt-2">
-      <div className="rounded-2xl bg-white border border-slate-200 p-5 sm:p-7 shadow-xs space-y-5">
+    <section
+      id="disqus-feedback-section"
+      className="space-y-4 pt-2"
+      style={{ color: '#334155', backgroundColor: '#ffffff' }}
+    >
+      <style>{`
+        #disqus-feedback-section,
+        #disqus-feedback-section *,
+        #disqus_thread,
+        #disqus_thread * {
+          color: #334155;
+        }
+        #disqus_thread {
+          color: #334155 !important;
+          background-color: #ffffff !important;
+        }
+        #disqus-feedback-section a,
+        #disqus_thread a {
+          color: #0d9488 !important;
+        }
+      `}</style>
+      <div
+        className="rounded-2xl border border-slate-200 p-5 sm:p-7 shadow-xs space-y-5"
+        style={{ color: '#334155', backgroundColor: '#ffffff' }}
+      >
         {/* Header with Title and Category */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-slate-100">
           <div className="flex items-start sm:items-center gap-3">
@@ -82,8 +105,12 @@ export const DisqusComments: React.FC = () => {
           </p>
         </div>
 
-        {/* Single canonical Disqus comment container */}
-        <div id="disqus_thread" className="min-h-[280px]" />
+        {/* Single canonical Disqus comment container with explicit standard HEX styles */}
+        <div
+          id="disqus_thread"
+          className="min-h-[280px]"
+          style={{ color: '#334155', backgroundColor: '#ffffff' }}
+        />
 
         <noscript>
           <p className="text-xs text-slate-500">
