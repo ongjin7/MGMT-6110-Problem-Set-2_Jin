@@ -69,6 +69,67 @@ export const Footer: React.FC = () => {
           </div>
         </div>
 
+        {/* Privacy Notice for Microsoft Clarity and Disqus */}
+        <div className="pt-4 border-t border-slate-800/80 text-[11px] leading-relaxed text-slate-400">
+          <p>
+            This page uses Microsoft Clarity and Disqus, which use cookies to record how visitors use the site and to host comments. By using this page you agree that we and Microsoft may collect and use this data. See the{' '}
+            <a
+              href="https://www.microsoft.com/privacy/privacystatement"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-slate-300 underline hover:text-white transition-colors"
+            >
+              Microsoft Privacy Statement
+            </a>{' '}
+            (
+            <a
+              href="https://www.microsoft.com/privacy/privacystatement"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-teal-400 underline hover:text-teal-300 transition-colors break-all"
+            >
+              https://www.microsoft.com/privacy/privacystatement
+            </a>
+            ), the{' '}
+            <a
+              href="https://disqus.com/privacy-policy/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-slate-300 underline hover:text-white transition-colors"
+            >
+              Disqus privacy policy
+            </a>{' '}
+            (
+            <a
+              href="https://disqus.com/privacy-policy/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-teal-400 underline hover:text-teal-300 transition-colors break-all"
+            >
+              https://disqus.com/privacy-policy/
+            </a>
+            ) and the{' '}
+            <a
+              href="https://disqus.com/data-sharing-settings/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-slate-300 underline hover:text-white transition-colors"
+            >
+              Disqus data sharing settings
+            </a>{' '}
+            (
+            <a
+              href="https://disqus.com/data-sharing-settings/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-teal-400 underline hover:text-teal-300 transition-colors break-all"
+            >
+              https://disqus.com/data-sharing-settings/
+            </a>
+            ).
+          </p>
+        </div>
+
         <div className="pt-4 border-t border-slate-800/50 flex flex-col sm:flex-row items-center justify-between text-[11px] text-slate-500 gap-2">
           <p>© {new Date().getFullYear()} OLA Buddy. Crafted for OLA Executive Condominium Residents (S544651).</p>
           <p>All upstream data fetched dynamically via secure serverless proxies.</p>
