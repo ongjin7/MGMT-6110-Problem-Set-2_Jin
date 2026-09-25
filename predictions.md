@@ -14,7 +14,7 @@ Committed before anybody in my group commented on my board. I do not edit this f
 **Devices and Browser Used:** Google Chrome, Iphone 15 Pro Max Safari.
 
 ---
-## My Findings/ Self Evaluation of OLA Buddy using the The 10 Heuristics
+## 2. My Findings (Self Evaluation of OLA Buddy using the The 10 Heuristics)
 ```
 ```
 ### 1. Visibility of System Status
@@ -136,5 +136,42 @@ Committed before anybody in my group commented on my board. I do not edit this f
 **Screen or System:** Only Screen changes are required as the fix is to add more instances where help and documentation could come in handy without increasing website/ app complexity.
 
 **The Repair**: To prompt to include more help and documentation support for complicated activities.
+```
+```
+---
+## 3. My predictions
+```
+```
+### 1. The three findings I expect my groupmates to raise, and the severity I expect them to give each:
+**First Finding:** 8. Aesthetic and Minimalist Design. 
+- I expect them to give this a severity of 2. Minor Usability Problem
+- I expect them to spot this as my website has 3 screens and is full of details/ capability as i had tried my best to include more functionalities for condo residents.
+
+**Second Finding:** 2. Match between the system and the real world
+- I expect them to give this a severity of 2. Minor Usability Problem
+- I expect them to spot this as my map only allows users to map from OLA to a destination, and is not flexible and aligned to capabilities in the real world.
+
+**Third Finding:** 10. Help and Documentation 
+- I expect them to give this a severity of 2. Minor Usability Problem
+- They should be able to see that nowhere in my app/ website has a help function for users to navigate better. 
+```
+```
+### 2. The heuristic I think my product breaks worst: 
+**Heuristic i broke worst :** 1. Visibility of System Status
+- I feel that my system has connected well to multiple APIs, but what is lacking is that the platform is not integrated with the current time, allowing time based recommendations for activities - this is a potential big issue if residents heed some of these recommendations without taking this into account.
+```
+```
+### 3. The finding that would show my own evaluation was wrong: 
+```
+```
+**If a classmate rates my 8. Aesthetic and Minimalist Design issue as severity 4.:** 
+- This is because fundamentally, i might have strong confirmation bias as the creator that the app is easy to navigate and use. But if my classmates inform me that it is too cluttered and not easy to use, i might need to relook the interface and the entire app to redesign the flow for users.
+```
+```
+---
+### 4. Findings i already heard in the studio
+```
+```
+NONE
 ```
 ```
