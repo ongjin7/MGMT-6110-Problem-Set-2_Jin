@@ -10,6 +10,7 @@ import {
   Navigation,
   ArrowRight,
   Sparkles,
+  X,
 } from 'lucide-react';
 
 interface DirectionsScreenProps {
@@ -546,8 +547,31 @@ export const DirectionsScreen: React.FC<DirectionsScreenProps> = ({
                   }
                 }}
                 placeholder="Search any Singapore destination, building, MRT or postal code..."
-                className="w-full pl-11 pr-24 py-3 rounded-xl border border-slate-300 focus:border-teal-600 focus:ring-2 focus:ring-teal-100 outline-hidden text-sm sm:text-base text-slate-900 transition-all placeholder:text-slate-400"
+                className={`w-full pl-11 ${searchTerm ? 'pr-30' : 'pr-24'} py-3 rounded-xl border border-slate-300 focus:border-teal-600 focus:ring-2 focus:ring-teal-100 outline-hidden text-sm sm:text-base text-slate-900 transition-all placeholder:text-slate-400`}
               />
+              {searchTerm.length > 0 && (
+                <button
+                  type="button"
+                  id="destination-search-clear-btn"
+                  aria-label="Clear search input"
+                  onClick={() => {
+                    searchRequestIdRef.current++;
+                    isSelectingRef.current = false;
+                    setSearchTerm('');
+                    setSearchResults([]);
+                    setSearchState('idle');
+                    setIsDropdownOpen(false);
+                    setSelectedDestination(null);
+                    setRouteResult(null);
+                    setRouteDataByMode({});
+                    setRouteState('idle');
+                    searchInputRef.current?.focus();
+                  }}
+                  className="absolute right-20 top-1/2 -translate-y-1/2 p-1 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => handleSearch(searchTerm, true)}
