@@ -122,6 +122,7 @@ export const DirectionsScreen: React.FC<DirectionsScreenProps> = ({
   const [routeState, setRouteState] = useState<FetchState>('idle');
   const [routeUpstreamStatus, setRouteUpstreamStatus] = useState<number | null>(null);
   const [routeResult, setRouteResult] = useState<RouteResult | null>(null);
+  const [routeDataByMode, setRouteDataByMode] = useState<Partial<Record<TravelMode, any>>>({});
 
   // Nearby transport state (stops around OLA EC extending to Sengkang MRT)
   const [nearbyBusStops, setNearbyBusStops] = useState<BusStopItem[]>([
@@ -237,6 +238,7 @@ export const DirectionsScreen: React.FC<DirectionsScreenProps> = ({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchWrapperRef = useRef<HTMLDivElement>(null);
   const isSelectingRef = useRef<boolean>(false);
+  const searchRequestIdRef = useRef<number>(0);
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -263,16 +265,15 @@ export const DirectionsScreen: React.FC<DirectionsScreenProps> = ({
   const handleSearch = async (term: string, autoSelectFirst: boolean = false) => {
     if (!term || term.trim() === '') return;
 
-    if (autoSelectFirst) {
-      setIsDropdownOpen(false);
-    } else {
-      setIsDropdownOpen(true);
-    }
+    const requestId = ++searchRequestIdRef.current;
+    setIsDropdownOpen(true);
     setSearchState('loading');
     setSearchUpstreamStatus(null);
 
     try {
       const res = await fetch(`/api/onemap-search?searchVal=${encodeURIComponent(term)}`);
+      if (requestId !== searchRequestIdRef.current) return;
+
       if (!res.ok) {
         setSearchUpstreamStatus(res.status);
         if (res.status === 401 || res.status === 403 || res.status === 503) {
@@ -280,27 +281,34 @@ export const DirectionsScreen: React.FC<DirectionsScreenProps> = ({
         } else {
           setSearchState('unreachable');
         }
-        if (!autoSelectFirst) setIsDropdownOpen(true);
+        setIsDropdownOpen(true);
         return;
       }
 
       const data = await res.json();
+      if (requestId !== searchRequestIdRef.current) return;
+
       if (!data.results || data.results.length === 0) {
         setSearchResults([]);
         setSearchState('empty');
-        if (!autoSelectFirst) setIsDropdownOpen(true);
+        setSelectedDestination(null);
+        setRouteResult(null);
+        setRouteDataByMode({});
+        setRouteState('idle');
+        setIsDropdownOpen(false);
       } else {
         setSearchResults(data.results);
         setSearchState('success');
         if (autoSelectFirst && data.results.length > 0) {
           handleSelectLocation(data.results[0]);
-        } else if (!autoSelectFirst) {
+        } else {
           setIsDropdownOpen(true);
         }
       }
     } catch (err) {
+      if (requestId !== searchRequestIdRef.current) return;
       setSearchState('unreachable');
-      if (!autoSelectFirst) setIsDropdownOpen(true);
+      setIsDropdownOpen(true);
     }
   };
 
@@ -328,7 +336,44 @@ export const DirectionsScreen: React.FC<DirectionsScreenProps> = ({
     }, 450);
 
     return () => clearTimeout(timer);
-  }, [searchTerm, selectedDestination]);
+  }, [searchTerm]);
+
+  // Reset cached mode routes and prefetch all 4 modes when selectedDestination changes
+  useEffect(() => {
+    if (!selectedDestination) {
+      setRouteDataByMode({});
+      return;
+    }
+
+    let isMounted = true;
+    setRouteDataByMode({});
+
+    const allModes: TravelMode[] = ['pt', 'drive', 'cycle', 'walk'];
+    allModes.forEach(async (mode) => {
+      if (mode === travelMode) return;
+      try {
+        const queryParams = new URLSearchParams({
+          destLat: selectedDestination.latitude.toString(),
+          destLng: selectedDestination.longitude.toString(),
+          routeType: mode,
+        });
+        const res = await fetch(`/api/onemap-route?${queryParams.toString()}`);
+        if (!isMounted || !res.ok) return;
+        const data = await res.json();
+        if (!isMounted || !data?.routeData) return;
+        setRouteDataByMode((prev) => ({
+          ...prev,
+          [mode]: data.routeData,
+        }));
+      } catch {
+        // Non-blocking prefetch for secondary mode tabs
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedDestination]);
 
   // Calculate Route whenever selectedDestination or travelMode changes
   useEffect(() => {
@@ -375,6 +420,12 @@ export const DirectionsScreen: React.FC<DirectionsScreenProps> = ({
           routeType: travelMode,
           routeData: data.routeData,
         });
+        if (data?.routeData) {
+          setRouteDataByMode((prev) => ({
+            ...prev,
+            [travelMode]: data.routeData,
+          }));
+        }
         setRouteState('success');
       } catch (err) {
         if (!isMounted) return;
@@ -391,6 +442,7 @@ export const DirectionsScreen: React.FC<DirectionsScreenProps> = ({
 
   // Select a destination from dropdown
   const handleSelectLocation = (loc: LocationItem) => {
+    searchRequestIdRef.current++;
     isSelectingRef.current = true;
     setSelectedDestination(loc);
     setSearchTerm(loc.name);
@@ -429,28 +481,8 @@ export const DirectionsScreen: React.FC<DirectionsScreenProps> = ({
 
   return (
     <div id="directions-screen-container" className="space-y-8 pb-10">
-      {/* Starting Point & Destination Search Section */}
+      {/* Destination Search Section */}
       <section className="space-y-4">
-        {/* Origin Card (Starting point is ALWAYS OLA Executive Condominium) */}
-        <div
-          id="origin-ola-card"
-          className="p-4 rounded-2xl bg-gradient-to-r from-teal-900 via-teal-800 to-slate-900 text-white shadow-md flex items-center gap-3 border border-teal-700/50"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-300 shrink-0">
-              <MapPin className="w-5 h-5 text-amber-400" />
-            </div>
-            <div>
-              <h2 className="text-base sm:text-lg font-bold text-white">
-                OLA Executive Condominium
-              </h2>
-              <p className="text-xs text-teal-200/80 mt-0.5">
-                70 Anchorvale Crescent • Sengkang, Singapore <span className="font-mono text-teal-300 font-semibold">(S544651)</span>
-              </p>
-            </div>
-          </div>
-        </div>
-
         {/* Destination Search Box */}
         <div className="relative" id="destination-search-wrapper" ref={searchWrapperRef}>
           <div className="p-4 sm:p-5 rounded-2xl border border-slate-200 bg-white shadow-xs space-y-3">
@@ -536,6 +568,7 @@ export const DirectionsScreen: React.FC<DirectionsScreenProps> = ({
                   key={q.name}
                   type="button"
                   onClick={() => {
+                    searchRequestIdRef.current++;
                     isSelectingRef.current = true;
                     setSearchTerm(q.name);
                     setSelectedDestination(q.location);
@@ -599,6 +632,29 @@ export const DirectionsScreen: React.FC<DirectionsScreenProps> = ({
         </div>
       </section>
 
+      {/* No Matching Destination Notice when search finishes with no match */}
+      {searchState === 'empty' && !selectedDestination && (
+        <section id="no-matching-destination-section" className="space-y-4">
+          <div
+            role="status"
+            aria-live="polite"
+            className="p-5 rounded-2xl border border-amber-200 bg-amber-50/90 text-amber-950 shadow-xs flex items-start gap-3"
+          >
+            <div className="p-2 rounded-xl bg-amber-100 text-amber-800 shrink-0 mt-0.5">
+              <MapPin className="w-5 h-5 text-amber-700" />
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm sm:text-base font-bold text-amber-950">
+                No matching destination found. Please try another place name or spelling.
+              </p>
+              <p className="text-xs text-amber-800">
+                No Singapore location matched &ldquo;{searchTerm.trim()}&rdquo;. Try searching by building name, MRT/LRT station, street name, or 6-digit postal code.
+              </p>
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* Selected Destination, Mode Selector & Detailed Directions */}
       {selectedDestination && (
         <section id="selected-route-section" className="space-y-4">
@@ -634,6 +690,7 @@ export const DirectionsScreen: React.FC<DirectionsScreenProps> = ({
               destination={selectedDestination}
               initialMode={travelMode}
               onModeChange={(mode) => setTravelMode(mode)}
+              routeDataByMode={routeDataByMode}
             />
           </div>
         </section>

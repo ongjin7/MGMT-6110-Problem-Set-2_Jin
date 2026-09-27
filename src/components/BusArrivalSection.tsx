@@ -1,9 +1,58 @@
-import React, { useState, useEffect } from 'react';
-import { BusStopItem, TrainStationItem, BusServiceArrival, BusRouteStop, FetchState } from '../types';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { BusStopItem, TrainStationItem, BusServiceArrival, BusRouteStop, FetchState, BusArrivalTiming } from '../types';
 import { DataStateNotice } from './DataStateNotice';
 import { StationRouteDetails } from './StationRouteDetails';
 import { STATION_ROUTE_DETAILS } from '../data/trainStationRoutes';
-import { Bus, Train, Clock, Users, Accessibility, ArrowRight, X, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Bus, Train, Clock, Users, Accessibility, ArrowRight, X, AlertCircle, CheckCircle2, RefreshCw } from 'lucide-react';
+
+function formatSgtTimeHhMmSs(date: Date = new Date()): string {
+  try {
+    return new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Singapore',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    }).format(date);
+  } catch {
+    const sgt = new Date(date.getTime() + 8 * 3600 * 1000);
+    const hh = String(sgt.getUTCHours()).padStart(2, '0');
+    const mm = String(sgt.getUTCMinutes()).padStart(2, '0');
+    const ss = String(sgt.getUTCSeconds()).padStart(2, '0');
+    return `${hh}:${mm}:${ss}`;
+  }
+}
+
+function formatArrivalClockTime(isoString?: string): string | null {
+  if (!isoString) return null;
+  const parsed = new Date(isoString);
+  if (isNaN(parsed.getTime())) return null;
+  try {
+    return new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Singapore',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(parsed);
+  } catch {
+    const sgt = new Date(parsed.getTime() + 8 * 3600 * 1000);
+    const hh = String(sgt.getUTCHours()).padStart(2, '0');
+    const mm = String(sgt.getUTCMinutes()).padStart(2, '0');
+    return `${hh}:${mm}`;
+  }
+}
+
+function refreshTimingCountdown(timing: BusArrivalTiming | null): BusArrivalTiming | null {
+  if (!timing) return null;
+  if (!timing.estimatedArrival) return timing;
+  const arrivalMs = new Date(timing.estimatedArrival).getTime();
+  if (isNaN(arrivalMs)) return timing;
+  const diffMins = Math.floor((arrivalMs - Date.now()) / 60000);
+  return {
+    ...timing,
+    minutes: diffMins <= 0 ? 0 : diffMins,
+  };
+}
 
 interface BusArrivalSectionProps {
   nearbyBusStops: BusStopItem[];
@@ -21,7 +70,14 @@ export const BusArrivalSection: React.FC<BusArrivalSectionProps> = ({
   const [arrivalState, setArrivalState] = useState<FetchState>('idle');
   const [upstreamStatus, setUpstreamStatus] = useState<number | null>(null);
   const [services, setServices] = useState<BusServiceArrival[]>([]);
-  
+  const [lastUpdatedTime, setLastUpdatedTime] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+
+  const isMountedRef = useRef<boolean>(true);
+  const activeStopCodeRef = useRef<string | null>(selectedBusStopCode);
+  const inFlightStopRef = useRef<string | null>(null);
+  const autoRefreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   // Route sequence view state
   const [activeServiceRoute, setActiveServiceRoute] = useState<string | null>(null);
   const [routeState, setRouteState] = useState<FetchState>('idle');
@@ -35,18 +91,26 @@ export const BusArrivalSection: React.FC<BusArrivalSectionProps> = ({
   const activeStationCode = hoveredStationCode || selectedStationCode;
   const activeStationDetail = activeStationCode ? STATION_ROUTE_DETAILS[activeStationCode] : null;
 
-  // When selectedBusStopCode changes, fetch live arrivals from /api/bus
-  useEffect(() => {
-    if (!selectedBusStopCode) return;
+  const fetchBusArrivals = useCallback(
+    async (stopCode: string, isBackgroundOrManual: boolean = false) => {
+      if (!stopCode) return;
+      // Avoid overlapping duplicate requests for the same bus stop
+      if (inFlightStopRef.current === stopCode) return;
 
-    let isMounted = true;
-    const fetchBusArrivals = async () => {
-      setArrivalState('loading');
+      inFlightStopRef.current = stopCode;
+      if (isBackgroundOrManual) {
+        setIsRefreshing(true);
+      } else {
+        setArrivalState('loading');
+      }
       setUpstreamStatus(null);
 
       try {
-        const res = await fetch(`/api/bus?BusStopCode=${encodeURIComponent(selectedBusStopCode)}`);
-        if (!isMounted) return;
+        const res = await fetch(
+          `/api/bus?BusStopCode=${encodeURIComponent(stopCode)}`,
+          { cache: 'no-store' }
+        );
+        if (!isMountedRef.current || activeStopCodeRef.current !== stopCode) return;
 
         if (!res.ok) {
           setUpstreamStatus(res.status);
@@ -59,27 +123,95 @@ export const BusArrivalSection: React.FC<BusArrivalSectionProps> = ({
         }
 
         const data = await res.json();
-        if (!isMounted) return;
+        if (!isMountedRef.current || activeStopCodeRef.current !== stopCode) return;
+
+        const fetchedAt = formatSgtTimeHhMmSs(new Date());
+        setLastUpdatedTime(fetchedAt);
 
         if (!data.services || data.services.length === 0) {
           setServices([]);
           setArrivalState('empty');
         } else {
-          setServices(data.services);
+          const updatedServices: BusServiceArrival[] = data.services.map(
+            (svc: BusServiceArrival) => ({
+              ...svc,
+              nextBus: refreshTimingCountdown(svc.nextBus),
+              nextBus2: refreshTimingCountdown(svc.nextBus2),
+              nextBus3: refreshTimingCountdown(svc.nextBus3),
+            })
+          );
+          setServices(updatedServices);
           setArrivalState('success');
         }
       } catch (err) {
-        if (!isMounted) return;
+        if (!isMountedRef.current || activeStopCodeRef.current !== stopCode) return;
         setArrivalState('unreachable');
+      } finally {
+        if (inFlightStopRef.current === stopCode) {
+          inFlightStopRef.current = null;
+        }
+        if (isMountedRef.current && activeStopCodeRef.current === stopCode) {
+          setIsRefreshing(false);
+        }
       }
-    };
+    },
+    []
+  );
 
-    fetchBusArrivals();
+  const resetAutoRefreshInterval = useCallback(
+    (stopCode: string) => {
+      if (autoRefreshTimerRef.current) {
+        clearInterval(autoRefreshTimerRef.current);
+      }
+      autoRefreshTimerRef.current = setInterval(() => {
+        fetchBusArrivals(stopCode, true);
+      }, 60000);
+    },
+    [fetchBusArrivals]
+  );
+
+  // When selectedBusStopCode changes, fetch arrivals and manage 60s auto-refresh interval
+  useEffect(() => {
+    isMountedRef.current = true;
+    activeStopCodeRef.current = selectedBusStopCode;
+    inFlightStopRef.current = null;
+    setIsRefreshing(false);
+
+    if (!selectedBusStopCode) {
+      if (autoRefreshTimerRef.current) {
+        clearInterval(autoRefreshTimerRef.current);
+        autoRefreshTimerRef.current = null;
+      }
+      return;
+    }
+
+    fetchBusArrivals(selectedBusStopCode, false);
+    resetAutoRefreshInterval(selectedBusStopCode);
 
     return () => {
-      isMounted = false;
+      if (autoRefreshTimerRef.current) {
+        clearInterval(autoRefreshTimerRef.current);
+        autoRefreshTimerRef.current = null;
+      }
     };
-  }, [selectedBusStopCode]);
+  }, [selectedBusStopCode, fetchBusArrivals, resetAutoRefreshInterval]);
+
+  // Clean up on component unmount
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+      if (autoRefreshTimerRef.current) {
+        clearInterval(autoRefreshTimerRef.current);
+        autoRefreshTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  const handleManualRefresh = () => {
+    if (!selectedBusStopCode) return;
+    resetAutoRefreshInterval(selectedBusStopCode);
+    fetchBusArrivals(selectedBusStopCode, true);
+  };
 
   // Fetch sequence of bus stops along route
   const handleViewRouteSequence = async (serviceNo: string) => {
@@ -314,7 +446,9 @@ export const BusArrivalSection: React.FC<BusArrivalSectionProps> = ({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
           <div>
             <span className="text-xs font-bold text-teal-700 uppercase tracking-wider">
-              Live Arrival Timings
+              {arrivalState === 'success' || arrivalState === 'loading' || isRefreshing
+                ? 'Live Arrival Timings'
+                : 'Bus Arrival Timings'}
             </span>
             <h3 className="text-lg font-extrabold text-slate-900">
               {currentStop ? `${currentStop.description} (Bus Stop ${currentStop.busStopCode})` : 'Selected Bus Stop'}
@@ -324,11 +458,48 @@ export const BusArrivalSection: React.FC<BusArrivalSectionProps> = ({
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500 flex items-center gap-1 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200">
-              <Clock className="w-3.5 h-3.5 text-teal-600" />
-              Live 60s Cache
-            </span>
+          <div className="flex flex-wrap items-center gap-2">
+            {arrivalState === 'loading' || isRefreshing ? (
+              <span className="text-xs text-teal-700 font-medium flex items-center gap-1.5 bg-teal-50 px-2.5 py-1 rounded-lg border border-teal-200">
+                <RefreshCw className="w-3.5 h-3.5 text-teal-600 animate-spin" />
+                Refreshing...
+              </span>
+            ) : arrivalState === 'success' ? (
+              <span className="text-xs text-emerald-800 font-medium flex items-center gap-1.5 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                Live • 60s Auto-Refresh
+              </span>
+            ) : (
+              <span className="text-xs text-slate-500 flex items-center gap-1 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200">
+                <Clock className="w-3.5 h-3.5 text-slate-400" />
+                {arrivalState === 'empty' ? 'No Active Services' : 'Status Offline'}
+              </span>
+            )}
+
+            {lastUpdatedTime && (
+              <span
+                id="bus-arrivals-last-updated"
+                className="text-xs text-slate-500 font-mono bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200"
+              >
+                Last updated at {lastUpdatedTime}
+              </span>
+            )}
+
+            <button
+              id="refresh-bus-arrivals-btn"
+              type="button"
+              onClick={handleManualRefresh}
+              disabled={arrivalState === 'loading' || isRefreshing || !selectedBusStopCode}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-teal-800 bg-white hover:bg-teal-50 border border-slate-200 hover:border-teal-300 shadow-2xs transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Refresh bus arrival timings"
+            >
+              <RefreshCw
+                className={`w-3.5 h-3.5 text-teal-700 ${
+                  arrivalState === 'loading' || isRefreshing ? 'animate-spin' : ''
+                }`}
+              />
+              <span>Refresh</span>
+            </button>
           </div>
         </div>
 
@@ -338,101 +509,118 @@ export const BusArrivalSection: React.FC<BusArrivalSectionProps> = ({
           state={arrivalState}
           upstreamStatus={upstreamStatus}
           customContext="LTA DataMall Bus Arrival Service"
-          onRetry={() => {
-            if (selectedBusStopCode) onSelectBusStop(selectedBusStopCode);
-          }}
+          onRetry={handleManualRefresh}
         />
 
         {/* Live Bus Services Grid */}
         {arrivalState === 'success' && services.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
-            {services.map(svc => (
-              <div
-                key={svc.serviceNo}
-                id={`bus-service-card-${svc.serviceNo}`}
-                className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white hover:border-teal-300 transition-all shadow-2xs space-y-3"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xl font-black px-2.5 py-1 rounded-lg bg-teal-700 text-white font-mono shadow-2xs">
-                      {svc.serviceNo}
-                    </span>
-                    {svc.operator && (
-                      <span className="text-[10px] uppercase font-bold text-slate-400">
-                        {svc.operator}
+            {services.map(svc => {
+              const nextBusClock = formatArrivalClockTime(svc.nextBus?.estimatedArrival);
+              const nextBus2Clock = formatArrivalClockTime(svc.nextBus2?.estimatedArrival);
+
+              return (
+                <div
+                  key={svc.serviceNo}
+                  id={`bus-service-card-${svc.serviceNo}`}
+                  className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white hover:border-teal-300 transition-all shadow-2xs space-y-3"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl font-black px-2.5 py-1 rounded-lg bg-teal-700 text-white font-mono shadow-2xs">
+                        {svc.serviceNo}
                       </span>
-                    )}
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => handleViewRouteSequence(svc.serviceNo)}
-                    className="text-xs font-semibold text-teal-700 hover:text-teal-900 inline-flex items-center gap-1 px-2 py-1 rounded hover:bg-teal-50 transition-colors cursor-pointer"
-                  >
-                    <span>Route Stops</span>
-                    <ArrowRight className="w-3 h-3" />
-                  </button>
-                </div>
-
-                {/* Next Bus 1 & Next Bus 2 Timings */}
-                <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200/70">
-                  {/* Next Bus */}
-                  <div className="p-2 rounded-lg bg-white border border-slate-200/80">
-                    <div className="flex items-center justify-between text-[11px] text-slate-500 mb-1">
-                      <span>Next Bus</span>
-                      {svc.nextBus?.type && (
-                        <span className="font-mono text-[9px] font-bold text-slate-600 bg-slate-100 px-1 rounded">
-                          {svc.nextBus.type === 'DD' ? 'Double' : 'Single'}
+                      {svc.operator && (
+                        <span className="text-[10px] uppercase font-bold text-slate-400">
+                          {svc.operator}
                         </span>
                       )}
                     </div>
-                    {svc.nextBus ? (
-                      <div>
-                        <div className="text-base font-black text-slate-900">
-                          {svc.nextBus.minutes === 0 ? 'Arr' : `${svc.nextBus.minutes} min`}
-                        </div>
-                        <div className="mt-1">
-                          {getLoadBadge(svc.nextBus.load)}
-                        </div>
-                      </div>
-                    ) : (
-                      <span className="text-xs text-slate-400">Not in service</span>
-                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => handleViewRouteSequence(svc.serviceNo)}
+                      className="text-xs font-semibold text-teal-700 hover:text-teal-900 inline-flex items-center gap-1 px-2 py-1 rounded hover:bg-teal-50 transition-colors cursor-pointer"
+                    >
+                      <span>Route Stops</span>
+                      <ArrowRight className="w-3 h-3" />
+                    </button>
                   </div>
 
-                  {/* 2nd Bus */}
-                  <div className="p-2 rounded-lg bg-white border border-slate-200/80">
-                    <div className="flex items-center justify-between text-[11px] text-slate-500 mb-1">
-                      <span>2nd Bus</span>
-                      {svc.nextBus2?.type && (
-                        <span className="font-mono text-[9px] font-bold text-slate-600 bg-slate-100 px-1 rounded">
-                          {svc.nextBus2.type === 'DD' ? 'Double' : 'Single'}
-                        </span>
+                  {/* Next Bus 1 & Next Bus 2 Timings */}
+                  <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200/70">
+                    {/* Next Bus */}
+                    <div className="p-2 rounded-lg bg-white border border-slate-200/80">
+                      <div className="flex items-center justify-between text-[11px] text-slate-500 mb-1">
+                        <span>Next Bus</span>
+                        {svc.nextBus?.type && (
+                          <span className="font-mono text-[9px] font-bold text-slate-600 bg-slate-100 px-1 rounded">
+                            {svc.nextBus.type === 'DD' ? 'Double' : 'Single'}
+                          </span>
+                        )}
+                      </div>
+                      {svc.nextBus ? (
+                        <div>
+                          <div className="flex items-baseline justify-between gap-1">
+                            <span className="text-base font-black text-slate-900">
+                              {svc.nextBus.minutes === 0 ? 'Arr' : `${svc.nextBus.minutes} min`}
+                            </span>
+                            {nextBusClock && (
+                              <span className="text-[11px] font-mono font-semibold text-teal-700">
+                                {nextBusClock}
+                              </span>
+                            )}
+                          </div>
+                          <div className="mt-1">
+                            {getLoadBadge(svc.nextBus.load)}
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-400">Not in service</span>
                       )}
                     </div>
-                    {svc.nextBus2 ? (
-                      <div>
-                        <div className="text-base font-black text-slate-700">
-                          {svc.nextBus2.minutes === 0 ? 'Arr' : `${svc.nextBus2.minutes} min`}
-                        </div>
-                        <div className="mt-1">
-                          {getLoadBadge(svc.nextBus2.load)}
-                        </div>
-                      </div>
-                    ) : (
-                      <span className="text-xs text-slate-400">--</span>
-                    )}
-                  </div>
-                </div>
 
-                {svc.nextBus?.feature === 'WAB' && (
-                  <div className="flex items-center gap-1 text-[10px] text-slate-500">
-                    <Accessibility className="w-3 h-3 text-teal-600" />
-                    <span>Wheelchair Accessible (WAB)</span>
+                    {/* 2nd Bus */}
+                    <div className="p-2 rounded-lg bg-white border border-slate-200/80">
+                      <div className="flex items-center justify-between text-[11px] text-slate-500 mb-1">
+                        <span>2nd Bus</span>
+                        {svc.nextBus2?.type && (
+                          <span className="font-mono text-[9px] font-bold text-slate-600 bg-slate-100 px-1 rounded">
+                            {svc.nextBus2.type === 'DD' ? 'Double' : 'Single'}
+                          </span>
+                        )}
+                      </div>
+                      {svc.nextBus2 ? (
+                        <div>
+                          <div className="flex items-baseline justify-between gap-1">
+                            <span className="text-base font-black text-slate-700">
+                              {svc.nextBus2.minutes === 0 ? 'Arr' : `${svc.nextBus2.minutes} min`}
+                            </span>
+                            {nextBus2Clock && (
+                              <span className="text-[11px] font-mono font-semibold text-slate-500">
+                                {nextBus2Clock}
+                              </span>
+                            )}
+                          </div>
+                          <div className="mt-1">
+                            {getLoadBadge(svc.nextBus2.load)}
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-400">--</span>
+                      )}
+                    </div>
                   </div>
-                )}
-              </div>
-            ))}
+
+                  {svc.nextBus?.feature === 'WAB' && (
+                    <div className="flex items-center gap-1 text-[10px] text-slate-500">
+                      <Accessibility className="w-3 h-3 text-teal-600" />
+                      <span>Wheelchair Accessible (WAB)</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
 

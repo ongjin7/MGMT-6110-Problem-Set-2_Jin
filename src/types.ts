@@ -216,6 +216,13 @@ export interface SystemHealth {
 
 export type FetchState = 'idle' | 'loading' | 'success' | 'empty' | 'refused' | 'unreachable';
 
+export interface OperatingHoursSpec {
+  openTime?: string; // "HH:MM" in 24-hour SGT
+  closeTime?: string; // "HH:MM" in 24-hour SGT
+  is24Hours?: boolean;
+  label: string;
+}
+
 export interface ActivityRecommendation {
   id: string;
   name: string;
@@ -232,4 +239,5 @@ export interface ActivityRecommendation {
   emoji?: string;
   cuteTag?: string;
   themeColor?: string;
+  operatingHours?: OperatingHoursSpec;
 }

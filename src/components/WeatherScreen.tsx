@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { WeatherData, TemperatureData, PsiData, ActivityRecommendation, FetchState, LocationItem } from '../types';
+import { WeatherData, TemperatureData, PsiData, ActivityRecommendation, OperatingHoursSpec, FetchState, LocationItem } from '../types';
 import { DataStateNotice } from './DataStateNotice';
 import {
   CloudSun,
@@ -46,6 +46,11 @@ const ALL_NEARBY_PLACES: ActivityRecommendation[] = [
     emoji: '🛍️',
     cuteTag: 'Mall & Cafes',
     themeColor: 'from-purple-500 to-indigo-600',
+    operatingHours: {
+      openTime: '10:00',
+      closeTime: '22:00',
+      label: '10:00 AM – 10:00 PM SGT',
+    },
   },
   {
     id: 'sengkang-sports-indoor',
@@ -63,6 +68,11 @@ const ALL_NEARBY_PLACES: ActivityRecommendation[] = [
     emoji: '🏸',
     cuteTag: 'Smash & Gym',
     themeColor: 'from-amber-500 to-orange-600',
+    operatingHours: {
+      openTime: '07:00',
+      closeTime: '22:00',
+      label: '7:00 AM – 10:00 PM SGT',
+    },
   },
   {
     id: 'sengkang-grand-mall',
@@ -80,6 +90,11 @@ const ALL_NEARBY_PLACES: ActivityRecommendation[] = [
     emoji: '🍜',
     cuteTag: 'Food & Chill',
     themeColor: 'from-rose-500 to-pink-600',
+    operatingHours: {
+      openTime: '10:00',
+      closeTime: '22:00',
+      label: '10:00 AM – 10:00 PM SGT',
+    },
   },
   {
     id: 'jewel-changi',
@@ -97,6 +112,11 @@ const ALL_NEARBY_PLACES: ActivityRecommendation[] = [
     emoji: '✨',
     cuteTag: 'Rain Vortex Icon',
     themeColor: 'from-teal-500 to-emerald-600',
+    operatingHours: {
+      openTime: '10:00',
+      closeTime: '22:00',
+      label: '10:00 AM – 10:00 PM SGT',
+    },
   },
 
   // Outdoor
@@ -116,6 +136,10 @@ const ALL_NEARBY_PLACES: ActivityRecommendation[] = [
     emoji: '🌿',
     cuteTag: 'Wetland Walks',
     themeColor: 'from-emerald-500 to-teal-600',
+    operatingHours: {
+      is24Hours: true,
+      label: 'Open 24 Hours (Park Lighting 7:00 PM – 7:00 AM)',
+    },
   },
   {
     id: 'punggol-waterway-connector',
@@ -133,6 +157,10 @@ const ALL_NEARBY_PLACES: ActivityRecommendation[] = [
     emoji: '🚴',
     cuteTag: 'Breezy Cycling',
     themeColor: 'from-cyan-500 to-blue-600',
+    operatingHours: {
+      is24Hours: true,
+      label: 'Open 24 Hours (Lighted PCN Corridor)',
+    },
   },
   {
     id: 'coney-island',
@@ -150,6 +178,11 @@ const ALL_NEARBY_PLACES: ActivityRecommendation[] = [
     emoji: '🏝️',
     cuteTag: 'Rustic Nature',
     themeColor: 'from-lime-600 to-emerald-700',
+    operatingHours: {
+      openTime: '07:00',
+      closeTime: '19:00',
+      label: '7:00 AM – 7:00 PM SGT',
+    },
   },
 
   // Sheltered / Warm weather
@@ -169,6 +202,11 @@ const ALL_NEARBY_PLACES: ActivityRecommendation[] = [
     emoji: '🏊',
     cuteTag: 'Covered Pool',
     themeColor: 'from-sky-500 to-cyan-600',
+    operatingHours: {
+      openTime: '08:00',
+      closeTime: '21:30',
+      label: '8:00 AM – 9:30 PM SGT',
+    },
   },
   {
     id: 'waterway-point',
@@ -186,8 +224,90 @@ const ALL_NEARBY_PLACES: ActivityRecommendation[] = [
     emoji: '🎬',
     cuteTag: 'Cinema & Dining',
     themeColor: 'from-violet-500 to-fuchsia-600',
+    operatingHours: {
+      openTime: '10:00',
+      closeTime: '22:00',
+      label: '10:00 AM – 10:00 PM SGT',
+    },
   }
 ];
+
+function parseHhMmToMinutes(hhmm: string): number {
+  const [hStr, mStr] = hhmm.split(':');
+  return (parseInt(hStr, 10) || 0) * 60 + (parseInt(mStr, 10) || 0);
+}
+
+function getSingaporeTime(now: Date = new Date()): {
+  hours: number;
+  minutes: number;
+  totalMinutes: number;
+  formattedTime: string;
+} {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Singapore',
+      hour12: false,
+      hour: '2-digit',
+      minute: '2-digit',
+    }).formatToParts(now);
+
+    const hourVal = parseInt(parts.find((p) => p.type === 'hour')?.value ?? '0', 10) % 24;
+    const minVal = parseInt(parts.find((p) => p.type === 'minute')?.value ?? '0', 10);
+
+    const formattedTime = new Intl.DateTimeFormat('en-SG', {
+      timeZone: 'Asia/Singapore',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    }).format(now);
+
+    return {
+      hours: hourVal,
+      minutes: minVal,
+      totalMinutes: hourVal * 60 + minVal,
+      formattedTime,
+    };
+  } catch {
+    const sgt = new Date(now.getTime() + 8 * 3600 * 1000);
+    const hours = sgt.getUTCHours();
+    const minutes = sgt.getUTCMinutes();
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const hour12 = hours % 12 === 0 ? 12 : hours % 12;
+    return {
+      hours,
+      minutes,
+      totalMinutes: hours * 60 + minutes,
+      formattedTime: `${hour12}:${String(minutes).padStart(2, '0')} ${period}`,
+    };
+  }
+}
+
+function isVenueOpenAtSgt(
+  hoursSpec?: OperatingHoursSpec,
+  currentTotalMinutes?: number
+): boolean {
+  if (!hoursSpec) return true;
+  if (hoursSpec.is24Hours) return true;
+  if (!hoursSpec.openTime || !hoursSpec.closeTime) return true;
+
+  const nowMins =
+    typeof currentTotalMinutes === 'number'
+      ? currentTotalMinutes
+      : getSingaporeTime().totalMinutes;
+
+  const openMins = parseHhMmToMinutes(hoursSpec.openTime);
+  const closeMins = parseHhMmToMinutes(hoursSpec.closeTime);
+
+  if (openMins === closeMins) return true;
+
+  // Normal daytime/evening operating hours (e.g. 10:00 to 22:00)
+  if (openMins < closeMins) {
+    return nowMins >= openMins && nowMins < closeMins;
+  }
+
+  // Operating hours that cross midnight (e.g. 18:00 to 02:00)
+  return nowMins >= openMins || nowMins < closeMins;
+}
 
 export const WeatherScreen: React.FC<WeatherScreenProps> = ({
   onSelectPlaceForDirections,
@@ -203,6 +323,7 @@ export const WeatherScreen: React.FC<WeatherScreenProps> = ({
   const [psiData, setPsiData] = useState<PsiData | null>(null);
   const [psiState, setPsiState] = useState<FetchState>('loading');
   const [psiUpstreamStatus, setPsiUpstreamStatus] = useState<number | null>(null);
+  const [sgtNow, setSgtNow] = useState(() => getSingaporeTime());
 
   // Fetch live weather from /api/weather
   const fetchWeather = async () => {
@@ -292,42 +413,113 @@ export const WeatherScreen: React.FC<WeatherScreenProps> = ({
     fetchWeather();
     fetchTemperature();
     fetchPsi();
+
+    const timer = setInterval(() => {
+      setSgtNow(getSingaporeTime());
+    }, 60000);
+    return () => clearInterval(timer);
   }, []);
 
-  // Determine rule-based recommendations strictly from live upstream weather data
+  // Determine rule-based recommendations strictly from live upstream weather and air-quality data
   const rawForecast = (weatherData?.forecast || '').toLowerCase();
   const currentTemp = temperatureData?.temperature ?? 30;
+  const forecastLabel = weatherData?.forecast || 'Fair';
+  const forecastLower = forecastLabel.toLowerCase();
 
   const isRain =
     rawForecast.includes('rain') ||
     rawForecast.includes('shower') ||
     rawForecast.includes('thunder') ||
-    rawForecast.includes('storm');
+    rawForecast.includes('storm') ||
+    rawForecast.includes('heavy');
 
   const isWarm = currentTemp >= 31.5;
-  const isFair =
-    rawForecast.includes('fair') ||
-    rawForecast.includes('partly cloudy') ||
-    rawForecast.includes('cloudy') ||
-    (!isRain && currentTemp < 32);
+  const isPoorAirQuality = psiData ? !psiData.exerciseAllowed : false;
+  const psiCategoryLower = psiData?.category ? psiData.category.toLowerCase() : 'good';
+  const psiSummaryText = psiData
+    ? `${psiCategoryLower} (24-hr PSI ${psiData.psi24Hourly})`
+    : 'within normal range';
 
-  // Filter recommendations based on live conditions
+  // Combined outdoor exercise evaluation (considering both air quality and current weather)
+  const canExerciseOutdoorsNow = Boolean(
+    psiData && psiData.exerciseAllowed && !isRain && !isWarm
+  );
+
+  let exerciseHeadline = '';
+  let exercisePrimaryAdvice = '';
+  let exerciseSecondaryAdvice = '';
+  let exerciseShortStatus = '';
+
+  if (psiData) {
+    if (!psiData.exerciseAllowed) {
+      exerciseHeadline = 'Indoor Exercise Preferred (Air Quality Advisory)';
+      exercisePrimaryAdvice = isRain
+        ? `Air quality is ${psiSummaryText} and current ${forecastLower} in Sengkang makes indoor exercise strongly preferable.`
+        : `Air quality is ${psiSummaryText} despite "${forecastLabel}" weather. ${psiData.exerciseRecommendation}`;
+      exerciseSecondaryAdvice =
+        'Vulnerable individuals (elderly, pregnant, children, or those with heart/lung conditions) should remain indoors.';
+      exerciseShortStatus = `Air quality ${psiCategoryLower}${isRain ? ` & ${forecastLower}` : ''} — prefer indoor exercise`;
+    } else if (isRain) {
+      exerciseHeadline = 'Prefer Indoor or Sheltered Exercise';
+      exercisePrimaryAdvice = `Air quality is ${psiSummaryText}, but current ${forecastLower} makes indoor or sheltered exercise preferable.`;
+      exerciseSecondaryAdvice =
+        'Hold off on open-air workouts along unsheltered park connectors until the rain clears; use indoor gyms, courts, or sheltered facilities instead.';
+      exerciseShortStatus = `Air quality ${psiCategoryLower}, but ${forecastLower} makes indoor/sheltered exercise preferable`;
+    } else if (isWarm) {
+      exerciseHeadline = 'Prefer Shaded, Sheltered or Indoor Exercise';
+      exercisePrimaryAdvice = `Air quality is ${psiSummaryText} with "${forecastLabel}" skies, but the warm ${currentTemp}°C temperature makes shaded, sheltered, or indoor exercise preferable.`;
+      exerciseSecondaryAdvice =
+        'Avoid strenuous open-sun workouts during peak heat; opt for sheltered pools, indoor gyms, or shaded riverside paths with frequent hydration.';
+      exerciseShortStatus = `Air quality ${psiCategoryLower}, warm (${currentTemp}°C) — prefer shaded or indoor exercise`;
+    } else {
+      exerciseHeadline = 'Conditions Suitable for Outdoor Exercise';
+      exercisePrimaryAdvice = `Air quality is ${psiSummaryText} and the current "${forecastLabel}" weather (${currentTemp}°C) is suitable for outdoor exercise.`;
+      exerciseSecondaryAdvice =
+        'Outdoor workouts, cycling, and jogging along Sengkang Riverside Park and Punggol Waterway can proceed comfortably.';
+      exerciseShortStatus = `Air quality ${psiCategoryLower} & ${forecastLower} weather — suitable for outdoor exercise`;
+    }
+  }
+
+  // Filter recommendations based on combined live weather, air-quality conditions, and current Singapore Time (SGT) operating hours
   let recommendedCategoryTitle = '';
   let conditionReason = '';
-  let filteredPlaces: ActivityRecommendation[] = [];
+  let weatherMatchedPlaces: ActivityRecommendation[] = [];
 
   if (isRain) {
     recommendedCategoryTitle = 'Rainy Weather: Prioritising Indoor & Sheltered Activities';
-    conditionReason = `Official Sengkang forecast indicates "${weatherData?.forecast}". Staying dry indoors with covered transit connections is recommended.`;
-    filteredPlaces = ALL_NEARBY_PLACES.filter(p => p.type === 'indoor' || p.type === 'sheltered');
+    conditionReason = `Air quality is ${psiSummaryText}, but the official Sengkang forecast indicates "${weatherData?.forecast}". Indoor and sheltered venues with covered transit connections are recommended over outdoor workouts.`;
+    weatherMatchedPlaces = ALL_NEARBY_PLACES.filter(p => p.type === 'indoor' || p.type === 'sheltered');
+  } else if (isPoorAirQuality) {
+    recommendedCategoryTitle = 'Air Quality Advisory: Prioritising Indoor Air-Conditioned Activities';
+    conditionReason = `Although Sengkang weather is "${forecastLabel}", air quality is ${psiSummaryText}. Indoor air-conditioned activities are recommended instead of outdoor exercise.`;
+    weatherMatchedPlaces = ALL_NEARBY_PLACES.filter(p => p.type === 'indoor');
   } else if (isWarm) {
-    recommendedCategoryTitle = 'Warm Conditions: Shaded & Air-Conditioned Destinations';
-    conditionReason = `Air temperature is ${currentTemp}°C from ${temperatureData?.station?.name || 'official station'}. Shaded parks, sheltered pools, and indoor dining are recommended.`;
-    filteredPlaces = ALL_NEARBY_PLACES.filter(p => p.weatherFit === 'warm' || p.type === 'indoor' || p.type === 'sheltered');
+    recommendedCategoryTitle = 'Warm Conditions: Shaded, Sheltered & Air-Conditioned Destinations';
+    conditionReason = `Air quality is ${psiSummaryText}, while air temperature is ${currentTemp}°C from ${temperatureData?.station?.name || 'official station'}. Sheltered pools and air-conditioned venues are preferable to strenuous open-air exercise.`;
+    weatherMatchedPlaces = ALL_NEARBY_PLACES.filter(p => p.weatherFit === 'warm' || p.type === 'indoor' || p.type === 'sheltered');
   } else {
     recommendedCategoryTitle = 'Pleasant Conditions: Outdoor Parks, Nature Trails & Walking';
-    conditionReason = `Official Sengkang forecast is "${weatherData?.forecast || 'Fair'}" with comfortable ${currentTemp}°C. Perfect for outdoor riverside walking, cycling, or tennis.`;
-    filteredPlaces = ALL_NEARBY_PLACES.filter(p => p.type === 'outdoor' || p.weatherFit === 'all');
+    conditionReason = `Air quality is ${psiSummaryText} and the official Sengkang forecast is "${forecastLabel}" with a comfortable ${currentTemp}°C — suitable for outdoor riverside walking, cycling, or park workouts.`;
+    weatherMatchedPlaces = ALL_NEARBY_PLACES.filter(p => p.type === 'outdoor' || p.weatherFit === 'all');
+  }
+
+  // Exclude venues that are closed at the current Singapore time (Asia/Singapore)
+  let filteredPlaces = weatherMatchedPlaces.filter(p =>
+    isVenueOpenAtSgt(p.operatingHours, sgtNow.totalMinutes)
+  );
+  const closedCount = weatherMatchedPlaces.length - filteredPlaces.length;
+
+  // If primary category venues are closed and outdoor conditions are safe (!isRain && !isPoorAirQuality), prefer currently open alternatives
+  if (filteredPlaces.length === 0 && !isRain && !isPoorAirQuality) {
+    filteredPlaces = ALL_NEARBY_PLACES.filter(p =>
+      isVenueOpenAtSgt(p.operatingHours, sgtNow.totalMinutes)
+    );
+  }
+
+  if (filteredPlaces.length === 0) {
+    conditionReason += ` At ${sgtNow.formattedTime} SGT, nearby malls, cafés, and indoor complexes are currently closed — at-home or sheltered resident activities within OLA are recommended until venues reopen.`;
+  } else if (closedCount > 0) {
+    conditionReason += ` Filtered for venues currently open at ${sgtNow.formattedTime} SGT (closed malls, cafés, and gated parks are excluded).`;
   }
 
   const getWeatherIcon = (forecastStr: string) => {
@@ -666,36 +858,37 @@ export const WeatherScreen: React.FC<WeatherScreenProps> = ({
               <div className="mt-3">
                 <DataStateNotice
                   id="exercise-state-notice"
-                  state={psiState}
+                  state={psiState === 'loading' || weatherState === 'loading' ? 'loading' : psiState}
                   upstreamStatus={psiUpstreamStatus}
-                  customContext="MOH / NEA Outdoor Exercise Health Guidance"
-                  onRetry={fetchPsi}
+                  customContext="MOH / NEA Outdoor Exercise & Weather Guidance"
+                  onRetry={() => {
+                    fetchPsi();
+                    fetchWeather();
+                  }}
                 />
               </div>
 
-              {psiState === 'success' && psiData && (
+              {psiState === 'success' && weatherState !== 'loading' && psiData && (
                 <div className="mt-4 flex items-center justify-between">
                   <div>
                     <div className="text-lg sm:text-xl font-black tracking-tight flex items-center gap-2">
-                      {psiData.exerciseAllowed ? (
+                      {canExerciseOutdoorsNow ? (
                         <span className="text-emerald-700 flex items-center gap-1.5">
                           <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-                          Yes, Safe to Exercise Outdoors
+                          {exerciseHeadline}
                         </span>
                       ) : (
                         <span className="text-amber-700 flex items-center gap-1.5">
                           <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
-                          Caution: Reduce Outdoor Exertion
+                          {exerciseHeadline}
                         </span>
                       )}
                     </div>
                     <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">
-                      {psiData.exerciseRecommendation}
+                      {exercisePrimaryAdvice}
                     </p>
                     <p className="text-[11px] text-slate-500 mt-1.5">
-                      {psiData.category === 'Good' || psiData.category === 'Moderate'
-                        ? 'Regular outdoor workouts, cycling & jogging along Sengkang Riverside Park can proceed.'
-                        : 'Vulnerable individuals (elderly, pregnant, children, heart/lung conditions) should stay indoors.'}
+                      {exerciseSecondaryAdvice}
                     </p>
                   </div>
                   <div className="p-3 rounded-2xl bg-amber-50/70 border border-amber-200/50 shrink-0">
@@ -706,14 +899,14 @@ export const WeatherScreen: React.FC<WeatherScreenProps> = ({
             </div>
 
             {/* Advisory Timestamp */}
-            {psiData && (
+            {psiData && weatherState !== 'loading' && (
               <div className="pt-3 border-t border-slate-100 flex flex-col gap-1 text-[11px] text-slate-500">
                 <div className="flex items-center gap-1.5">
                   <HeartPulse className="w-3.5 h-3.5 text-rose-500 shrink-0" />
-                  <span>Public Health Exercise Advisory</span>
+                  <span>Combined Weather & Air Quality Exercise Guidance</span>
                 </div>
                 <div className="text-[10px] text-slate-400">
-                  Target: OLA EC Residents & Outdoor Recreation • Status: {psiData.shortAdvice}
+                  Target: OLA EC Residents & Outdoor Recreation • Status: {exerciseShortStatus}
                 </div>
               </div>
             )}
@@ -738,92 +931,125 @@ export const WeatherScreen: React.FC<WeatherScreenProps> = ({
         </div>
 
         {/* Recommended Places Grid with Fun Visuals */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filteredPlaces.map(place => (
-            <div
-              key={place.id}
-              id={`place-card-${place.id}`}
-              className="group rounded-2xl border border-slate-200/90 bg-white shadow-xs hover:border-teal-300 hover:shadow-lg transition-all duration-300 flex flex-col justify-between overflow-hidden"
-            >
-              {/* Card Visual Header Image & Cute Badge */}
-              <div className="relative h-44 w-full overflow-hidden bg-slate-900">
-                {place.imageUrl && (
-                  <img
-                    src={place.imageUrl}
-                    alt={place.name}
-                    referrerPolicy="no-referrer"
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-90 group-hover:opacity-100"
-                    loading="lazy"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src =
-                        'https://images.unsplash.com/photo-1519567241046-7f570eee3ce6?w=700&auto=format&fit=crop&q=80';
-                    }}
-                  />
-                )}
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-900/30 to-transparent pointer-events-none" />
+        {filteredPlaces.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {filteredPlaces.map(place => (
+              <div
+                key={place.id}
+                id={`place-card-${place.id}`}
+                className="group rounded-2xl border border-slate-200/90 bg-white shadow-xs hover:border-teal-300 hover:shadow-lg transition-all duration-300 flex flex-col justify-between overflow-hidden"
+              >
+                {/* Card Visual Header Image & Cute Badge */}
+                <div className="relative h-44 w-full overflow-hidden bg-slate-900">
+                  {place.imageUrl && (
+                    <img
+                      src={place.imageUrl}
+                      alt={place.name}
+                      referrerPolicy="no-referrer"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-90 group-hover:opacity-100"
+                      loading="lazy"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src =
+                          'https://images.unsplash.com/photo-1519567241046-7f570eee3ce6?w=700&auto=format&fit=crop&q=80';
+                      }}
+                    />
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-900/30 to-transparent pointer-events-none" />
 
-                {/* Floating Fun Visual Emblem/Logo */}
-                <div className="absolute bottom-3 left-3 flex items-center gap-2">
-                  <div className="w-10 h-10 rounded-xl bg-white/95 backdrop-blur-md shadow-md flex items-center justify-center text-xl border border-white/60 shrink-0 transform group-hover:scale-110 transition-transform">
-                    <span role="img" aria-label={place.name}>
-                      {place.emoji || '✨'}
-                    </span>
+                  {/* Floating Fun Visual Emblem/Logo */}
+                  <div className="absolute bottom-3 left-3 flex items-center gap-2">
+                    <div className="w-10 h-10 rounded-xl bg-white/95 backdrop-blur-md shadow-md flex items-center justify-center text-xl border border-white/60 shrink-0 transform group-hover:scale-110 transition-transform">
+                      <span role="img" aria-label={place.name}>
+                        {place.emoji || '✨'}
+                      </span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-teal-300 drop-shadow-sm">
+                        {place.category}
+                      </span>
+                      <span className="text-xs font-bold text-white drop-shadow-md">
+                        {place.cuteTag || 'Recommended'}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex flex-col">
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-teal-300 drop-shadow-sm">
-                      {place.category}
-                    </span>
-                    <span className="text-xs font-bold text-white drop-shadow-md">
-                      {place.cuteTag || 'Recommended'}
-                    </span>
+
+                  {/* Floating Distance Badge */}
+                  <div className="absolute top-3 right-3 bg-slate-900/80 backdrop-blur-md text-white text-[11px] font-bold px-2.5 py-1 rounded-full border border-white/20 shadow-xs flex items-center gap-1.5">
+                    <MapPin className="w-3 h-3 text-teal-400 shrink-0" />
+                    <span>{place.distanceKm} km</span>
                   </div>
                 </div>
 
-                {/* Floating Distance Badge */}
-                <div className="absolute top-3 right-3 bg-slate-900/80 backdrop-blur-md text-white text-[11px] font-bold px-2.5 py-1 rounded-full border border-white/20 shadow-xs flex items-center gap-1.5">
-                  <MapPin className="w-3 h-3 text-teal-400 shrink-0" />
-                  <span>{place.distanceKm} km</span>
+                {/* Card Body */}
+                <div className="p-4 sm:p-5 flex flex-col justify-between flex-1 space-y-3">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="text-base font-bold text-slate-900 leading-snug group-hover:text-teal-800 transition-colors">
+                        {place.name}
+                      </h3>
+                    </div>
+
+                    {place.operatingHours && (
+                      <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-[11px] font-semibold text-emerald-800">
+                        <Clock className="w-3 h-3 text-emerald-600 shrink-0" />
+                        <span>Open now • {place.operatingHours.label}</span>
+                      </div>
+                    )}
+
+                    <p className="text-xs text-slate-600 leading-relaxed line-clamp-3">
+                      {place.description}
+                    </p>
+
+                    {/* Transit Route Hint */}
+                    <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 text-[11px] text-slate-700 flex items-start gap-2">
+                      <Compass className="w-3.5 h-3.5 text-teal-600 shrink-0 mt-0.5" />
+                      <span className="leading-snug">{place.suggestedTransit}</span>
+                    </div>
+                  </div>
+
+                  {/* Action Bar */}
+                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-semibold text-slate-500 flex items-center gap-1">
+                      <Clock className="w-3 h-3 text-slate-400" />
+                      ~{place.travelTimeMins} mins
+                    </span>
+
+                    <button
+                      type="button"
+                      onClick={() => handleRouteToPlace(place)}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-teal-800 bg-teal-50 hover:bg-teal-100 border border-teal-200 transition-colors cursor-pointer"
+                    >
+                      <span>Directions From OLA</span>
+                      <ArrowRight className="w-3.5 h-3.5 text-teal-700" />
+                    </button>
+                  </div>
                 </div>
               </div>
-
-              {/* Card Body */}
-              <div className="p-4 sm:p-5 flex flex-col justify-between flex-1 space-y-3">
-                <div className="space-y-2">
-                  <h3 className="text-base font-bold text-slate-900 leading-snug group-hover:text-teal-800 transition-colors">
-                    {place.name}
-                  </h3>
-
-                  <p className="text-xs text-slate-600 leading-relaxed line-clamp-3">
-                    {place.description}
-                  </p>
-
-                  {/* Transit Route Hint */}
-                  <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 text-[11px] text-slate-700 flex items-start gap-2">
-                    <Compass className="w-3.5 h-3.5 text-teal-600 shrink-0 mt-0.5" />
-                    <span className="leading-snug">{place.suggestedTransit}</span>
-                  </div>
-                </div>
-
-                {/* Action Bar */}
-                <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
-                  <span className="text-[11px] font-semibold text-slate-500 flex items-center gap-1">
-                    <Clock className="w-3 h-3 text-slate-400" />
-                    ~{place.travelTimeMins} mins
-                  </span>
-
-                  <button
-                    type="button"
-                    onClick={() => handleRouteToPlace(place)}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-teal-800 bg-teal-50 hover:bg-teal-100 border border-teal-200 transition-colors cursor-pointer"
-                  >
-                    <span>Directions From OLA</span>
-                    <ArrowRight className="w-3.5 h-3.5 text-teal-700" />
-                  </button>
-                </div>
+            ))}
+          </div>
+        ) : (
+          <div
+            id="no-open-venues-recommendation"
+            className="p-5 sm:p-6 rounded-2xl border border-slate-200 bg-white shadow-xs space-y-3"
+          >
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 rounded-xl bg-teal-50 border border-teal-200 text-teal-800 shrink-0">
+                <Clock className="w-5 h-5 text-teal-700" />
+              </div>
+              <div className="space-y-1.5">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 text-[11px] font-bold">
+                  Current Time: {sgtNow.formattedTime} SGT • Nearby Malls & Indoor Venues Closed
+                </span>
+                <h3 className="text-base sm:text-lg font-bold text-slate-900">
+                  Recommended Now: At-Home Indoor Wellness, Stretching & Rest at OLA
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                  Nearby malls, cafés, and indoor sports facilities (such as Compass One, Sengkang Grand Mall, Waterway Point, and Sengkang Sports Centre) are currently outside their operating hours, and current outdoor conditions make open-air workouts unsuitable. We recommend staying indoors at home for light stretching, yoga, reading, or rest until Sengkang Sports Centre reopens at 7:00 AM SGT and malls reopen at 10:00 AM SGT.
+                </p>
               </div>
             </div>
-          ))}
-        </div>
+          </div>
+        )}
       </section>
     </div>
   );

@@ -5,6 +5,7 @@ interface LogoProps {
   size?: 'sm' | 'md' | 'lg';
   showBadge?: boolean;
   variant?: 'light' | 'dark';
+  subtitle?: string;
 }
 
 export const Logo: React.FC<LogoProps> = ({
@@ -12,6 +13,7 @@ export const Logo: React.FC<LogoProps> = ({
   size = 'md',
   showBadge = false,
   variant = 'light',
+  subtitle,
 }) => {
   const iconSizes = {
     sm: 'w-7 h-7',
@@ -89,6 +91,15 @@ export const Logo: React.FC<LogoProps> = ({
             OLA <span className={`${isDark ? 'text-teal-400' : 'text-teal-700'} font-extrabold tracking-wide`}>BUDDY</span>
           </span>
         </div>
+
+        {subtitle && (
+          <p
+            id="ola-buddy-subtitle"
+            className="text-xs text-slate-600 mt-1 leading-snug select-text"
+          >
+            {subtitle}
+          </p>
+        )}
 
         {showBadge && (
           <div className="flex items-center gap-1.5 mt-0.5">

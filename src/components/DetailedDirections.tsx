@@ -21,17 +21,19 @@ interface DetailedDirectionsProps {
   destination: LocationItem;
   initialMode?: TravelMode;
   onModeChange?: (mode: TravelMode) => void;
+  routeDataByMode?: Partial<Record<TravelMode, any>>;
 }
 
 export const DetailedDirections: React.FC<DetailedDirectionsProps> = ({
   destination,
   initialMode = 'pt',
   onModeChange,
+  routeDataByMode,
 }) => {
   const [activeMode, setActiveMode] = useState<TravelMode>(initialMode);
   const [showAllModes, setShowAllModes] = useState<boolean>(false);
 
-  const directionsMap = generateDetailedDirections(destination);
+  const directionsMap = generateDetailedDirections(destination, routeDataByMode);
   const currentDirection: ModeDirections = directionsMap[activeMode];
 
   const handleSelectMode = (mode: TravelMode) => {

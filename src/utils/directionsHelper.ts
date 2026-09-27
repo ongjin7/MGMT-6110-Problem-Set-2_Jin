@@ -49,8 +49,727 @@ export function calculateDistanceKm(
   return parseFloat((R * c).toFixed(2));
 }
 
+const UPPERCASE_TOKENS = new Set([
+  'MRT',
+  'LRT',
+  'TPE',
+  'CTE',
+  'PIE',
+  'SLE',
+  'KPE',
+  'ECP',
+  'AYE',
+  'BKE',
+  'KJE',
+  'MCE',
+  'OLA',
+  'EC',
+  'HDB',
+  'SKGH',
+  'CBD',
+  'ION',
+  'SMU',
+  'NUS',
+  'NTU',
+  'SUTD',
+  'PCN',
+  'NEL',
+  'NSL',
+  'EWL',
+  'CCL',
+  'DTL',
+  'TEL',
+  'STC',
+  'PTC',
+  'II',
+  'III',
+]);
+
+export function formatPlaceName(raw?: string | null): string {
+  if (!raw) return '';
+  const trimmed = String(raw).trim();
+  if (!trimmed) return '';
+
+  return trimmed
+    .split(/\s+/)
+    .map((word) => {
+      const clean = word.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+      if (UPPERCASE_TOKENS.has(clean) || /^(SW|SE|PW|PE|NE|NS|EW|CC|CE|DT|TE|BP|CG)\d{1,2}[A-Z]?$/.test(clean)) {
+        return word.toUpperCase();
+      }
+      if (/^\d+[A-Za-z]+$/.test(word)) {
+        return word.toUpperCase();
+      }
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    })
+    .join(' ');
+}
+
+function extractStopCode(stop: any): string {
+  if (!stop) return '';
+  if (stop.stopCode && String(stop.stopCode).trim()) {
+    return String(stop.stopCode).trim().toUpperCase();
+  }
+  if (stop.stopId && String(stop.stopId).includes(':')) {
+    const code = String(stop.stopId).split(':').pop()?.trim() || '';
+    return code.toUpperCase();
+  }
+  return '';
+}
+
+function formatStopLocation(
+  stop: any,
+  dest: LocationItem,
+  isOrigin: boolean = false,
+  isDestination: boolean = false
+): string {
+  const rawName = String(stop?.name || '').trim();
+  if (isOrigin || !rawName || rawName.toUpperCase() === 'ORIGIN') {
+    return `${OLA_ORIGIN.name} (70 Anchorvale Crescent)`;
+  }
+  if (isDestination || rawName.toUpperCase() === 'DESTINATION') {
+    return dest.name;
+  }
+
+  const formattedName = formatPlaceName(rawName);
+  const code = extractStopCode(stop);
+
+  if (!code) return formattedName;
+  if (formattedName.toUpperCase().includes(code)) return formattedName;
+
+  if (/^\d{5}$/.test(code)) {
+    return `${formattedName} (Bus Stop ${code})`;
+  }
+  return `${formattedName} (${code})`;
+}
+
+function formatTransitService(leg: any): {
+  serviceName: string;
+  badge: string;
+  iconType: 'lrt' | 'mrt' | 'bus';
+} {
+  const mode = String(leg?.mode || '').toUpperCase();
+  const routeCode = String(leg?.routeShortName || leg?.route || '').trim().toUpperCase();
+  const routeLong = String(leg?.routeLongName || '').trim();
+
+  if (mode === 'BUS') {
+    const busNo = routeCode || formatPlaceName(routeLong) || 'Service';
+    return {
+      serviceName: `Bus ${busNo}`,
+      badge: `Bus ${busNo}`,
+      iconType: 'bus',
+    };
+  }
+
+  const fromToNames = `${leg?.from?.name || ''} ${leg?.to?.name || ''}`.toUpperCase();
+  const isLrt =
+    mode === 'TRAM' ||
+    mode === 'LRT' ||
+    /^(SW|SE|PW|PE|BP|STC|PTC)$/.test(routeCode) ||
+    fromToNames.includes('LRT');
+
+  const lineNamesByCode: Record<string, string> = {
+    SW: 'Sengkang West LRT (SW)',
+    SE: 'Sengkang East LRT (SE)',
+    STC: 'Sengkang LRT (STC)',
+    PW: 'Punggol West LRT (PW)',
+    PE: 'Punggol East LRT (PE)',
+    PTC: 'Punggol LRT (PTC)',
+    BP: 'Bukit Panjang LRT (BP)',
+    NE: 'North East Line (NEL)',
+    NS: 'North South Line (NSL)',
+    EW: 'East West Line (EWL)',
+    CG: 'East West Line Changi Branch (CG)',
+    CC: 'Circle Line (CCL)',
+    CE: 'Circle Line Extension (CE)',
+    DT: 'Downtown Line (DTL)',
+    TE: 'Thomson-East Coast Line (TEL)',
+  };
+
+  const resolvedLineName =
+    lineNamesByCode[routeCode] ||
+    (routeLong ? formatPlaceName(routeLong) : '') ||
+    (isLrt ? `LRT Line (${routeCode || 'LRT'})` : `MRT Line (${routeCode || 'MRT'})`);
+
+  return {
+    serviceName: resolvedLineName,
+    badge: routeCode || (isLrt ? 'LRT' : 'MRT'),
+    iconType: isLrt ? 'lrt' : 'mrt',
+  };
+}
+
+function formatDistanceMeters(meters: number): string {
+  const m = Math.max(0, Math.round(meters));
+  if (m >= 1000) {
+    return `${(m / 1000).toFixed(1)} km`;
+  }
+  return `${m} m`;
+}
+
+function extractRoadFromAddress(address?: string): string {
+  if (!address) return '';
+  const cleaned = address
+    .replace(/,?\s*Singapore\s*\d{6}/i, '')
+    .replace(/^\d+[A-Za-z]?\s+/, '')
+    .trim();
+  return cleaned;
+}
+
+function buildPublicTransportFromApi(dest: LocationItem, routeData: any): ModeDirections | null {
+  const itineraries = routeData?.plan?.itineraries;
+  if (!Array.isArray(itineraries) || itineraries.length === 0) {
+    return null;
+  }
+
+  // Prefer the first itinerary that has transit legs if available, otherwise first itinerary
+  const itinerary =
+    itineraries.find(
+      (it: any) =>
+        Array.isArray(it?.legs) &&
+        it.legs.some((l: any) => String(l?.mode || '').toUpperCase() !== 'WALK')
+    ) || itineraries[0];
+
+  const legs: any[] = Array.isArray(itinerary?.legs) ? itinerary.legs : [];
+  if (legs.length === 0) return null;
+
+  const totalDurationMins = Math.max(1, Math.round((Number(itinerary.duration) || 60) / 60));
+  const totalDistanceMeters = legs.reduce((sum, leg) => sum + (Number(leg?.distance) || 0), 0);
+  const totalDistanceKm = Math.max(0.1, parseFloat((totalDistanceMeters / 1000).toFixed(2)));
+
+  const steps: DirectionStep[] = [];
+  const transitServicesUsed: string[] = [];
+
+  legs.forEach((leg, idx) => {
+    const mode = String(leg?.mode || '').toUpperCase();
+    const isFirst = idx === 0;
+    const isLast = idx === legs.length - 1;
+    const legMins = Math.max(1, Math.round((Number(leg?.duration) || 60) / 60));
+    const legDistMeters = Number(leg?.distance) || 0;
+
+    if (mode === 'WALK') {
+      const fromLocation = isFirst
+        ? `${OLA_ORIGIN.name} (70 Anchorvale Crescent)`
+        : formatStopLocation(leg.from, dest, false, false);
+
+      // If next leg is transit, ensure toLocation matches the next leg's boarding stop
+      const nextLeg = idx + 1 < legs.length ? legs[idx + 1] : null;
+      const toLocation = isLast
+        ? dest.name
+        : nextLeg?.from
+        ? formatStopLocation(nextLeg.from, dest, false, false)
+        : formatStopLocation(leg.to, dest, false, false);
+
+      // Extract real street names from OneMap walking sub-steps
+      const rawSubSteps: any[] = Array.isArray(leg.steps) ? leg.steps : [];
+      const namedStepSegments: string[] = [];
+      const seenStreets = new Set<string>();
+
+      rawSubSteps.forEach((s) => {
+        const rawStreet = String(s?.streetName || '').trim();
+        const lower = rawStreet.toLowerCase();
+        if (
+          !rawStreet ||
+          s?.bogusName ||
+          lower === 'origin' ||
+          lower === 'destination' ||
+          lower === 'walkway' ||
+          lower === 'path' ||
+          lower === 'footpath' ||
+          lower === 'sidewalk' ||
+          lower === 'unnamed' ||
+          lower === 'linkway' ||
+          lower === 'footbridge' ||
+          lower === 'steps'
+        ) {
+          return;
+        }
+        const niceStreet = formatPlaceName(rawStreet);
+        if (!seenStreets.has(niceStreet.toUpperCase())) {
+          seenStreets.add(niceStreet.toUpperCase());
+          const subDist = Math.round(Number(s?.distance) || 0);
+          namedStepSegments.push(subDist > 0 ? `${niceStreet} (${subDist} m)` : niceStreet);
+        }
+      });
+
+      const destRoad = extractRoadFromAddress(dest.address);
+      let instruction = '';
+      if (isFirst && isLast) {
+        instruction = `Walk from ${OLA_ORIGIN.name} (70 Anchorvale Crescent) to ${dest.name}`;
+      } else if (isFirst) {
+        instruction = `Walk from ${OLA_ORIGIN.name} (70 Anchorvale Crescent) to ${toLocation}`;
+      } else if (isLast) {
+        instruction = `Walk from ${fromLocation} to ${dest.name}${destRoad ? ` (${destRoad})` : ''}`;
+      } else {
+        instruction = `Transfer on foot from ${fromLocation} to ${toLocation}`;
+      }
+
+      let detail = '';
+      if (namedStepSegments.length > 0) {
+        if (isLast) {
+          detail = `Proceed along ${namedStepSegments.join(' → ')} to arrive at ${dest.name}${dest.address ? `, ${dest.address}` : ''}.`;
+        } else {
+          detail = `Proceed along ${namedStepSegments.join(' → ')} to reach ${toLocation}.`;
+        }
+      } else if (isFirst) {
+        detail = `Walk ${formatDistanceMeters(legDistMeters)} from ${OLA_ORIGIN.name} along Anchorvale Crescent to ${toLocation}.`;
+      } else if (isLast) {
+        detail = `Walk ${formatDistanceMeters(legDistMeters)} from ${fromLocation} to ${dest.name}${dest.address ? ` at ${dest.address}` : ''}.`;
+      } else {
+        detail = `Follow the pedestrian transfer linkway (${formatDistanceMeters(legDistMeters)}) from ${fromLocation} to ${toLocation}.`;
+      }
+
+      steps.push({
+        stepNumber: steps.length + 1,
+        instruction,
+        detail,
+        distanceOrTime: `${legMins} min (${formatDistanceMeters(legDistMeters)})`,
+        badge: isLast ? 'Destination' : isFirst ? 'Origin Walk' : 'Transfer Walk',
+        iconType: isLast ? 'flag' : 'walk',
+      });
+    } else {
+      const fromLocation = formatStopLocation(leg.from, dest, false, false);
+      const toLocation = formatStopLocation(leg.to, dest, false, false);
+      const { serviceName, badge, iconType } = formatTransitService(leg);
+
+      if (!transitServicesUsed.includes(serviceName)) {
+        transitServicesUsed.push(serviceName);
+      }
+
+      const intermediateRaw: any[] = Array.isArray(leg.intermediateStops)
+        ? leg.intermediateStops
+        : [];
+      const intermediateNames = intermediateRaw
+        .map((st) => formatStopLocation(st, dest, false, false))
+        .filter(Boolean);
+
+      const stopCount =
+        intermediateRaw.length > 0
+          ? intermediateRaw.length + 1
+          : typeof leg.numIntermediateStops === 'number' && leg.numIntermediateStops > 0
+          ? leg.numIntermediateStops
+          : null;
+
+      const fromCode = extractStopCode(leg.from);
+      const toCode = extractStopCode(leg.to);
+
+      const instruction = `Board ${serviceName} at ${fromLocation} and alight at ${toLocation}`;
+
+      let detail = '';
+      if (intermediateNames.length > 0) {
+        detail = `Ride ${stopCount} ${stopCount === 1 ? 'stop' : 'stops'} via ${intermediateNames.join(' → ')} and alight at ${toLocation}.`;
+      } else if (stopCount === 1) {
+        detail = `Ride 1 stop directly from ${fromLocation} and alight at ${toLocation}.`;
+      } else if (stopCount && stopCount > 1) {
+        detail = `Ride ${stopCount} stops from ${fromLocation} and alight at ${toLocation}.`;
+      } else {
+        detail = `Travel on ${serviceName} from ${fromLocation} and alight at ${toLocation}.`;
+      }
+
+      if (isLast) {
+        detail += ` Destination ${dest.name}${dest.address ? ` (${dest.address})` : ''} is right at ${toLocation}.`;
+      }
+
+      steps.push({
+        stepNumber: steps.length + 1,
+        instruction,
+        detail,
+        distanceOrTime: `${legMins} min (${formatDistanceMeters(legDistMeters)}${stopCount ? ` • ${stopCount} stop${stopCount === 1 ? '' : 's'}` : ''})`,
+        badge: fromCode && toCode ? `${badge}: ${fromCode} → ${toCode}` : badge,
+        iconType,
+      });
+    }
+  });
+
+  const firstTransitLeg = legs.find((l) => String(l?.mode || '').toUpperCase() !== 'WALK');
+  const lastTransitLeg = [...legs]
+    .reverse()
+    .find((l) => String(l?.mode || '').toUpperCase() !== 'WALK');
+
+  const summary =
+    transitServicesUsed.length > 0
+      ? `${transitServicesUsed.join(' → ')} to ${dest.name}`
+      : `Direct pedestrian walk from ${OLA_ORIGIN.name} to ${dest.name}`;
+
+  const highlights: string[] = [];
+  if (firstTransitLeg) {
+    highlights.push(`Board at ${formatStopLocation(firstTransitLeg.from, dest)}`);
+  }
+  if (lastTransitLeg) {
+    highlights.push(`Alight at ${formatStopLocation(lastTransitLeg.to, dest)}`);
+  }
+  if (typeof itinerary.walkDistance === 'number') {
+    highlights.push(`${Math.round(itinerary.walkDistance)} m total walking`);
+  }
+
+  const fareStr = itinerary.fare
+    ? `Fare: $${itinerary.fare} (SimplyGo / EZ-Link)`
+    : transitServicesUsed.length === 0
+    ? 'Free (Walk)'
+    : 'Standard SimplyGo fare';
+
+  const residentTips =
+    firstTransitLeg && lastTransitLeg
+      ? `OneMap live transit route: Start from ${OLA_ORIGIN.name} (70 Anchorvale Crescent), board at ${formatStopLocation(firstTransitLeg.from, dest)}, and alight at ${formatStopLocation(lastTransitLeg.to, dest)} for ${dest.name}.`
+      : `Direct pedestrian route from ${OLA_ORIGIN.name} (70 Anchorvale Crescent) to ${dest.name}.`;
+
+  return {
+    mode: 'pt',
+    modeLabel: 'Public Transport',
+    timeMins: totalDurationMins,
+    distanceKm: totalDistanceKm,
+    summary,
+    highlights,
+    steps,
+    residentTips,
+    fareOrCost: fareStr,
+  };
+}
+
+function cleanInstructionText(
+  rawText: string,
+  maneuver: string,
+  resolvedStreet: string
+): string {
+  const text = String(rawText || '').trim();
+  if (!text) {
+    return `${formatPlaceName(maneuver || 'Continue')} onto ${resolvedStreet}`;
+  }
+
+  // Replace uppercase road names in OneMap instruction text with formatted place names
+  let formatted = text
+    .replace(/\b([A-Z]{2,}(?:\s+[A-Z0-9]{2,})*)\b/g, (match) => formatPlaceName(match))
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!formatted.toLowerCase().includes(resolvedStreet.toLowerCase())) {
+    formatted = `${formatted} on ${resolvedStreet}`;
+  }
+
+  return formatted;
+}
+
+function buildStreetRouteFromApi(
+  mode: 'drive' | 'cycle' | 'walk',
+  dest: LocationItem,
+  routeData: any
+): ModeDirections | null {
+  const rawInstructions: any[] = Array.isArray(routeData?.route_instructions)
+    ? routeData.route_instructions
+    : [];
+  if (rawInstructions.length === 0) {
+    return null;
+  }
+
+  const routeSummary = routeData?.route_summary || {};
+  const totalTimeMins = Math.max(
+    1,
+    Math.round((Number(routeSummary.total_time) || 60) / 60)
+  );
+  const totalDistanceKm = Math.max(
+    0.1,
+    parseFloat(((Number(routeSummary.total_distance) || 100) / 1000).toFixed(2))
+  );
+
+  const startStreet =
+    formatPlaceName(routeSummary.start_point) || 'Anchorvale Crescent';
+  const endStreet =
+    formatPlaceName(routeSummary.end_point) ||
+    extractRoadFromAddress(dest.address) ||
+    dest.name;
+
+  // First pass: extract raw street names for each row
+  const rawStreets = rawInstructions.map((inst) => {
+    const candidate = String(inst?.[1] || '').trim();
+    if (
+      !candidate ||
+      candidate.toLowerCase() === 'unnamed' ||
+      candidate.toLowerCase() === 'road' ||
+      candidate.toLowerCase() === 'walkway' ||
+      candidate.toLowerCase() === 'path' ||
+      candidate.toLowerCase() === 'cycling path'
+    ) {
+      return '';
+    }
+    return formatPlaceName(candidate);
+  });
+
+  // Second pass: resolve every row's location so no step has an empty or vague street name
+  const resolvedStreets = rawStreets.map((st, idx) => {
+    if (st) return st;
+    if (idx === 0) return startStreet;
+    if (idx === rawInstructions.length - 1) return endStreet;
+
+    let prevNamed = startStreet;
+    for (let p = idx - 1; p >= 0; p--) {
+      if (rawStreets[p]) {
+        prevNamed = rawStreets[p];
+        break;
+      }
+    }
+
+    let nextNamed = endStreet;
+    for (let n = idx + 1; n < rawInstructions.length; n++) {
+      if (rawStreets[n]) {
+        nextNamed = rawStreets[n];
+        break;
+      }
+    }
+
+    if (prevNamed.toUpperCase() === nextNamed.toUpperCase()) {
+      return prevNamed;
+    }
+    const connectorWord =
+      mode === 'drive'
+        ? 'Slip Road'
+        : mode === 'cycle'
+        ? 'Park Connector Link'
+        : 'Pedestrian Linkway';
+    return `${prevNamed} → ${nextNamed} ${connectorWord}`;
+  });
+
+  interface GroupedSegment {
+    streetName: string;
+    maneuver: string;
+    firstText: string;
+    compass: string;
+    distMeters: number;
+    timeSecs: number;
+    subManeuvers: string[];
+    isDestination: boolean;
+  }
+
+  const grouped: GroupedSegment[] = [];
+
+  rawInstructions.forEach((inst, idx) => {
+    const maneuver = String(inst?.[0] || 'Continue').trim();
+    const distMeters = Number(inst?.[2]) || 0;
+    const timeSecs = Number(inst?.[4]) || 0;
+    const compass = String(inst?.[6] || '').trim();
+    const rawText = String(inst?.[9] || '').trim();
+    const streetName = resolvedStreets[idx];
+    const isDest =
+      idx === rawInstructions.length - 1 ||
+      maneuver.toLowerCase().includes('destination') ||
+      rawText.toLowerCase().includes('arrived at your destination');
+
+    if (isDest) {
+      grouped.push({
+        streetName: endStreet,
+        maneuver: 'Destination',
+        firstText: rawText,
+        compass,
+        distMeters,
+        timeSecs,
+        subManeuvers: [],
+        isDestination: true,
+      });
+      return;
+    }
+
+    const prevGroup = grouped.length > 0 ? grouped[grouped.length - 1] : null;
+    if (
+      prevGroup &&
+      !prevGroup.isDestination &&
+      prevGroup.streetName.toUpperCase() === streetName.toUpperCase()
+    ) {
+      prevGroup.distMeters += distMeters;
+      prevGroup.timeSecs += timeSecs;
+      const cleanedSub = cleanInstructionText(rawText, maneuver, streetName);
+      if (
+        distMeters > 0 &&
+        !prevGroup.subManeuvers.includes(cleanedSub) &&
+        cleanedSub !== prevGroup.firstText
+      ) {
+        prevGroup.subManeuvers.push(`${cleanedSub} (${formatDistanceMeters(distMeters)})`);
+      }
+    } else {
+      grouped.push({
+        streetName,
+        maneuver,
+        firstText: cleanInstructionText(rawText, maneuver, streetName),
+        compass,
+        distMeters,
+        timeSecs,
+        subManeuvers: [],
+        isDestination: false,
+      });
+    }
+  });
+
+  const iconType: 'car' | 'bike' | 'walk' =
+    mode === 'drive' ? 'car' : mode === 'cycle' ? 'bike' : 'walk';
+
+  const steps: DirectionStep[] = grouped.map((seg, idx) => {
+    if (seg.isDestination) {
+      return {
+        stepNumber: idx + 1,
+        instruction: `Arrive at ${dest.name} on ${seg.streetName}`,
+        detail: `Destination reached at ${dest.name}${dest.address ? `, ${dest.address}` : ''}${dest.postalCode ? ` (S${dest.postalCode})` : ''}.`,
+        distanceOrTime: 'Arrival',
+        badge: 'Destination',
+        iconType: 'flag',
+      };
+    }
+
+    const nextSeg = idx + 1 < grouped.length ? grouped[idx + 1] : null;
+    const nextTargetName =
+      nextSeg && !nextSeg.isDestination ? nextSeg.streetName : `${dest.name} (${endStreet})`;
+
+    const stepMins = Math.max(1, Math.round(seg.timeSecs / 60));
+    const timeOrDistLabel =
+      seg.timeSecs >= 45
+        ? `${stepMins} min (${formatDistanceMeters(seg.distMeters)})`
+        : formatDistanceMeters(seg.distMeters);
+
+    const instruction =
+      idx === 0
+        ? `Depart ${OLA_ORIGIN.name} (70 Anchorvale Crescent) onto ${seg.streetName}`
+        : seg.firstText;
+
+    let detail = `Follow ${seg.streetName} for ${formatDistanceMeters(seg.distMeters)}${
+      seg.compass ? ` heading ${seg.compass}` : ''
+    } to connect onto ${nextTargetName}.`;
+
+    if (seg.subManeuvers.length > 0) {
+      detail += ` Along ${seg.streetName}: ${seg.subManeuvers.slice(0, 3).join('; ')}.`;
+    }
+
+    return {
+      stepNumber: idx + 1,
+      instruction,
+      detail,
+      distanceOrTime: timeOrDistLabel,
+      badge: seg.streetName,
+      iconType,
+    };
+  });
+
+  const routeNamesRaw: string[] = Array.isArray(routeData?.route_name)
+    ? routeData.route_name
+        .map((n: any) => formatPlaceName(String(n || '')))
+        .filter(Boolean)
+    : [];
+
+  const distinctMajorRoads =
+    routeNamesRaw.length > 0
+      ? routeNamesRaw
+      : Array.from(
+          new Set(
+            grouped
+              .filter((g) => !g.isDestination)
+              .map((g) => g.streetName)
+              .filter((name) => !name.includes('→'))
+          )
+        ).slice(0, 3);
+
+  const summary =
+    distinctMajorRoads.length > 0
+      ? `Via ${distinctMajorRoads.join(' → ')} to ${dest.name}`
+      : `${startStreet} → ${endStreet} to ${dest.name}`;
+
+  const highlights: string[] = [
+    `Start: ${startStreet}`,
+    `End: ${endStreet}`,
+  ];
+  if (distinctMajorRoads.length > 0) {
+    highlights.push(`Main corridor: ${distinctMajorRoads[0]}`);
+  }
+
+  const modeLabels: Record<'drive' | 'cycle' | 'walk', string> = {
+    drive: 'Car / Taxi',
+    cycle: 'Bike / Cycling',
+    walk: 'Walking',
+  };
+
+  const residentTipsByMode: Record<'drive' | 'cycle' | 'walk', string> = {
+    drive: `OneMap live driving route from ${OLA_ORIGIN.name} via ${startStreet} and ${distinctMajorRoads.join(', ') || endStreet} directly to ${dest.name} (${endStreet}).`,
+    cycle: `OneMap live cycling route from ${OLA_ORIGIN.name} starting on ${startStreet} and connecting to ${endStreet} at ${dest.name}.`,
+    walk: `OneMap live walking route from ${OLA_ORIGIN.name} starting on ${startStreet} and arriving at ${dest.name} via ${endStreet}.`,
+  };
+
+  const fareByMode: Record<'drive' | 'cycle' | 'walk', string> = {
+    drive: 'ERP & carpark rates apply',
+    cycle: 'Zero emissions',
+    walk: 'Free & healthy',
+  };
+
+  return {
+    mode,
+    modeLabel: modeLabels[mode],
+    timeMins: totalTimeMins,
+    distanceKm: totalDistanceKm,
+    summary,
+    highlights,
+    steps,
+    residentTips: residentTipsByMode[mode],
+    fareOrCost: fareByMode[mode],
+  };
+}
+
+// Coordinate-indexed real Singapore MRT stations for pre-API synchronous fallback
+interface SgStationRef {
+  name: string;
+  code: string;
+  line: string;
+  lat: number;
+  lng: number;
+  transferStation: string;
+  transferLine: string;
+}
+
+const SG_MRT_STATIONS: SgStationRef[] = [
+  { name: 'Sengkang MRT Station', code: 'NE16', line: 'North East Line (NEL)', lat: 1.39169, lng: 103.89548, transferStation: 'Sengkang MRT Station (NE16)', transferLine: 'North East Line (NEL)' },
+  { name: 'Punggol MRT Station', code: 'NE17', line: 'North East Line (NEL)', lat: 1.4052, lng: 103.9023, transferStation: 'Sengkang MRT Station (NE16)', transferLine: 'North East Line (NEL) towards Punggol' },
+  { name: 'Buangkok MRT Station', code: 'NE15', line: 'North East Line (NEL)', lat: 1.3829, lng: 103.8931, transferStation: 'Sengkang MRT Station (NE16)', transferLine: 'North East Line (NEL) towards HarbourFront' },
+  { name: 'Hougang MRT Station', code: 'NE14', line: 'North East Line (NEL)', lat: 1.3712, lng: 103.8924, transferStation: 'Sengkang MRT Station (NE16)', transferLine: 'North East Line (NEL) towards HarbourFront' },
+  { name: 'Kovan MRT Station', code: 'NE13', line: 'North East Line (NEL)', lat: 1.3602, lng: 103.8851, transferStation: 'Sengkang MRT Station (NE16)', transferLine: 'North East Line (NEL) towards HarbourFront' },
+  { name: 'Serangoon MRT Station', code: 'NE12 / CC13', line: 'North East Line (NEL)', lat: 1.3497, lng: 103.8737, transferStation: 'Sengkang MRT Station (NE16)', transferLine: 'North East Line (NEL) towards HarbourFront' },
+  { name: 'Woodleigh MRT Station', code: 'NE11', line: 'North East Line (NEL)', lat: 1.3392, lng: 103.8708, transferStation: 'Sengkang MRT Station (NE16)', transferLine: 'North East Line (NEL) towards HarbourFront' },
+  { name: 'Potong Pasir MRT Station', code: 'NE10', line: 'North East Line (NEL)', lat: 1.3314, lng: 103.8691, transferStation: 'Sengkang MRT Station (NE16)', transferLine: 'North East Line (NEL) towards HarbourFront' },
+  { name: 'Boon Keng MRT Station', code: 'NE9', line: 'North East Line (NEL)', lat: 1.3193, lng: 103.8616, transferStation: 'Sengkang MRT Station (NE16)', transferLine: 'North East Line (NEL) towards HarbourFront' },
+  { name: 'Farrer Park MRT Station', code: 'NE8', line: 'North East Line (NEL)', lat: 1.3124, lng: 103.8542, transferStation: 'Sengkang MRT Station (NE16)', transferLine: 'North East Line (NEL) towards HarbourFront' },
+  { name: 'Little India MRT Station', code: 'NE7 / DT12', line: 'North East Line (NEL)', lat: 1.3068, lng: 103.8496, transferStation: 'Sengkang MRT Station (NE16)', transferLine: 'North East Line (NEL) towards HarbourFront' },
+  { name: 'Dhoby Ghaut MRT Station', code: 'NE6 / NS24 / CC1', line: 'North East Line (NEL)', lat: 1.2993, lng: 103.8458, transferStation: 'Sengkang MRT Station (NE16)', transferLine: 'North East Line (NEL) towards HarbourFront' },
+  { name: 'Clarke Quay MRT Station', code: 'NE5', line: 'North East Line (NEL)', lat: 1.2884, lng: 103.8465, transferStation: 'Sengkang MRT Station (NE16)', transferLine: 'North East Line (NEL) towards HarbourFront' },
+  { name: 'Chinatown MRT Station', code: 'NE4 / DT19', line: 'North East Line (NEL)', lat: 1.2844, lng: 103.844, transferStation: 'Sengkang MRT Station (NE16)', transferLine: 'North East Line (NEL) towards HarbourFront' },
+  { name: 'Outram Park MRT Station', code: 'NE3 / EW16 / TE17', line: 'North East Line (NEL)', lat: 1.2802, lng: 103.8395, transferStation: 'Sengkang MRT Station (NE16)', transferLine: 'North East Line (NEL) towards HarbourFront' },
+  { name: 'HarbourFront MRT Station', code: 'NE1 / CC29', line: 'North East Line (NEL)', lat: 1.2653, lng: 103.8215, transferStation: 'Sengkang MRT Station (NE16)', transferLine: 'North East Line (NEL) towards HarbourFront' },
+  { name: 'Orchard MRT Station', code: 'NS22 / TE14', line: 'North South Line (NSL)', lat: 1.304, lng: 103.8318, transferStation: 'Dhoby Ghaut MRT Station (NE6 / NS24)', transferLine: 'North South Line (NSL) towards Jurong East' },
+  { name: 'Somerset MRT Station', code: 'NS23', line: 'North South Line (NSL)', lat: 1.3003, lng: 103.839, transferStation: 'Dhoby Ghaut MRT Station (NE6 / NS24)', transferLine: 'North South Line (NSL) towards Jurong East' },
+  { name: 'City Hall MRT Station', code: 'NS25 / EW13', line: 'North South Line (NSL)', lat: 1.2931, lng: 103.852, transferStation: 'Dhoby Ghaut MRT Station (NE6 / NS24)', transferLine: 'North South Line (NSL) towards Marina South Pier' },
+  { name: 'Raffles Place MRT Station', code: 'NS26 / EW14', line: 'North South Line (NSL)', lat: 1.283, lng: 103.8519, transferStation: 'Dhoby Ghaut MRT Station (NE6 / NS24)', transferLine: 'North South Line (NSL) towards Marina South Pier' },
+  { name: 'Marina Bay MRT Station', code: 'NS27 / CE2 / TE20', line: 'North South Line (NSL)', lat: 1.2764, lng: 103.8546, transferStation: 'Dhoby Ghaut MRT Station (NE6 / NS24)', transferLine: 'North South Line (NSL) towards Marina South Pier' },
+  { name: 'Bayfront MRT Station', code: 'CE1 / DT16', line: 'Downtown Line (DTL)', lat: 1.2819, lng: 103.8591, transferStation: 'Little India MRT Station (NE7 / DT12)', transferLine: 'Downtown Line (DTL) towards Expo' },
+  { name: 'Bugis MRT Station', code: 'EW12 / DT14', line: 'Downtown Line (DTL)', lat: 1.3005, lng: 103.856, transferStation: 'Little India MRT Station (NE7 / DT12)', transferLine: 'Downtown Line (DTL) towards Expo' },
+  { name: 'Promenade MRT Station', code: 'CC4 / DT15', line: 'Downtown Line (DTL)', lat: 1.2932, lng: 103.8611, transferStation: 'Little India MRT Station (NE7 / DT12)', transferLine: 'Downtown Line (DTL) towards Expo' },
+  { name: 'Bishan MRT Station', code: 'NS17 / CC15', line: 'Circle Line (CCL)', lat: 1.3508, lng: 103.8482, transferStation: 'Serangoon MRT Station (NE12 / CC13)', transferLine: 'Circle Line (CCL) towards HarbourFront' },
+  { name: 'Ang Mo Kio MRT Station', code: 'NS16', line: 'North South Line (NSL)', lat: 1.37, lng: 103.8495, transferStation: 'Bishan MRT Station (CC15 / NS17)', transferLine: 'North South Line (NSL) towards Jurong East' },
+  { name: 'Yishun MRT Station', code: 'NS13', line: 'North South Line (NSL)', lat: 1.4294, lng: 103.835, transferStation: 'Bishan MRT Station (CC15 / NS17)', transferLine: 'North South Line (NSL) towards Jurong East' },
+  { name: 'Woodlands MRT Station', code: 'NS9 / TE2', line: 'North South Line (NSL)', lat: 1.4369, lng: 103.7865, transferStation: 'Bishan MRT Station (CC15 / NS17)', transferLine: 'North South Line (NSL) towards Jurong East' },
+  { name: 'Paya Lebar MRT Station', code: 'EW8 / CC9', line: 'Circle Line (CCL)', lat: 1.3177, lng: 103.8924, transferStation: 'Serangoon MRT Station (NE12 / CC13)', transferLine: 'Circle Line (CCL) towards Dhoby Ghaut / Marina Bay' },
+  { name: 'Tampines MRT Station', code: 'EW2 / DT32', line: 'Downtown Line (DTL)', lat: 1.3533, lng: 103.9452, transferStation: 'MacPherson MRT Station (CC10 / DT26)', transferLine: 'Downtown Line (DTL) towards Expo' },
+  { name: 'Changi Airport MRT Station', code: 'CG2', line: 'East West Line Changi Branch', lat: 1.3573, lng: 103.9888, transferStation: 'Cheng Lim Stn Exit B (Bus Stop 67429)', transferLine: 'Bus 110 Express via Tampines Expressway (TPE)' },
+  { name: 'Jurong East MRT Station', code: 'NS1 / EW24', line: 'East West Line (EWL)', lat: 1.3331, lng: 103.7422, transferStation: 'Outram Park MRT Station (NE3 / EW16)', transferLine: 'East West Line (EWL) towards Tuas Link' },
+  { name: 'Buona Vista MRT Station', code: 'EW21 / CC22', line: 'Circle Line (CCL)', lat: 1.3072, lng: 103.7902, transferStation: 'Serangoon MRT Station (NE12 / CC13)', transferLine: 'Circle Line (CCL) towards HarbourFront' },
+  { name: 'Botanic Gardens MRT Station', code: 'CC19 / DT9', line: 'Circle Line (CCL)', lat: 1.3224, lng: 103.8154, transferStation: 'Serangoon MRT Station (NE12 / CC13)', transferLine: 'Circle Line (CCL) towards HarbourFront' },
+];
+
+function findClosestStation(lat: number, lng: number): SgStationRef {
+  let best = SG_MRT_STATIONS[0];
+  let bestDist = Infinity;
+  for (const st of SG_MRT_STATIONS) {
+    const d = calculateDistanceKm(lat, lng, st.lat, st.lng);
+    if (d < bestDist) {
+      bestDist = d;
+      best = st;
+    }
+  }
+  return best;
+}
+
 export function generateDetailedDirections(
-  dest: LocationItem
+  dest: LocationItem,
+  routeDataByMode?: Partial<Record<TravelMode, any>>
 ): Record<TravelMode, ModeDirections> {
   const straightDist = calculateDistanceKm(
     OLA_ORIGIN.latitude,
@@ -58,403 +777,331 @@ export function generateDetailedDirections(
     dest.latitude,
     dest.longitude
   );
-  const roadDist = parseFloat((straightDist * 1.32).toFixed(1));
+  const roadDist = Math.max(0.2, parseFloat((straightDist * 1.32).toFixed(1)));
   const nameLower = (dest.name + ' ' + dest.address).toLowerCase();
+  const destRoad = extractRoadFromAddress(dest.address) || dest.name;
 
-  // Known location flags
+  // Known location flags for synchronous initial render before API resolves
   const isSengkangMRT = nameLower.includes('sengkang mrt') || nameLower.includes('compass one');
   const isChangiOrJewel = nameLower.includes('jewel') || nameLower.includes('changi airport');
-  const isSKGH = nameLower.includes('sengkang general hospital') || nameLower.includes('sengkang hospital') || nameLower.includes('skgh');
+  const isSKGH =
+    nameLower.includes('sengkang general hospital') ||
+    nameLower.includes('sengkang hospital') ||
+    nameLower.includes('skgh');
   const isWaterway = nameLower.includes('waterway point') || nameLower.includes('punggol');
-  const isOrchard = nameLower.includes('orchard') || nameLower.includes('somerset');
-  const isCBD = nameLower.includes('raffles place') || nameLower.includes('marina bay') || nameLower.includes('tanjong pagar') || nameLower.includes('shenton');
 
-  // --- 1. PUBLIC TRANSPORT ---
+  const closestStation = findClosestStation(dest.latitude, dest.longitude);
+
+  // --- 1. PUBLIC TRANSPORT (Fallback if routeDataByMode.pt not yet loaded) ---
   let ptTime = Math.max(5, Math.round(roadDist * 2.8 + 6));
   let ptDist = roadDist;
-  let ptSummary = 'Cheng Lim LRT / Bus to MRT North East Line (NEL)';
-  let ptHighlights = ['Cheng Lim LRT (SW1) 150m away', 'Direct sheltered linkways'];
+  let ptSummary = `Cheng Lim LRT (SW1) → Sengkang MRT (NE16) → ${closestStation.name} (${closestStation.code})`;
+  let ptHighlights = [
+    'Board at Cheng Lim LRT Station (SW1)',
+    `Alight at ${closestStation.name} (${closestStation.code})`,
+  ];
   let ptSteps: DirectionStep[] = [];
-  let ptTips = 'OLA side gate along Anchorvale Crescent offers the quickest sheltered access to Cheng Lim LRT.';
+  let ptTips =
+    'OLA side gate along 70 Anchorvale Crescent connects via sheltered linkway to Cheng Lim LRT Station (SW1).';
   let ptFare = 'Est. ~$1.09 - $2.15 (SimplyGo / EZ-Link)';
 
   if (isSengkangMRT) {
     ptTime = 5;
     ptDist = 0.9;
-    ptSummary = 'Sengkang West LRT (1 stop) or sheltered scenic linkway';
-    ptHighlights = ['1 stop on LRT (~2 mins ride)', 'Direct sheltered access to Compass One'];
+    ptSummary = 'Sengkang West LRT from Cheng Lim LRT Station (SW1) to Sengkang MRT Station (NE16)';
+    ptHighlights = ['Board at Cheng Lim LRT (SW1)', 'Alight at Sengkang MRT (NE16)'];
     ptSteps = [
       {
         stepNumber: 1,
-        instruction: 'Walk 150m from OLA side gate to Cheng Lim LRT Station (SW1)',
-        detail: 'Cross the sheltered pedestrian crossing on Anchorvale Street.',
-        distanceOrTime: '2 mins (150 m)',
+        instruction: 'Walk from OLA Executive Condominium (70 Anchorvale Crescent) to Cheng Lim LRT Station (SW1)',
+        detail: 'Proceed 150 m along Anchorvale Crescent and cross Anchorvale Street to Cheng Lim LRT Station (SW1).',
+        distanceOrTime: '2 min (150 m)',
         iconType: 'walk',
-        badge: 'Sheltered',
+        badge: 'Origin Walk',
       },
       {
         stepNumber: 2,
-        instruction: 'Board Sengkang West LRT towards Sengkang Town Centre',
-        detail: 'Platform 1 (via Compassvale). Runs every 3–4 minutes during peak hours.',
-        distanceOrTime: '2 mins (1 stop)',
+        instruction: 'Board Sengkang West LRT (SW) at Cheng Lim LRT Station (SW1) and alight at Sengkang MRT Station (STC / NE16)',
+        detail: 'Ride 1 stop directly from Cheng Lim LRT Station (SW1) and alight at Sengkang MRT Station (STC / NE16).',
+        distanceOrTime: '2 min (0.8 km • 1 stop)',
         iconType: 'lrt',
-        badge: 'SW1 → NE16/STC',
+        badge: 'SW: SW1 → NE16',
       },
       {
         stepNumber: 3,
-        instruction: 'Alight at Sengkang Town Centre Station (SW0 / NE16)',
-        detail: 'Direct seamless connection into Compass One Mall and Sengkang MRT concourse.',
-        distanceOrTime: '1 min',
+        instruction: `Walk from Sengkang MRT Station (NE16) to ${dest.name} (${destRoad})`,
+        detail: `Proceed along Sengkang Square to arrive at ${dest.name}, ${dest.address}.`,
+        distanceOrTime: '1 min (90 m)',
         iconType: 'flag',
-        badge: 'Arrival',
+        badge: 'Destination',
       },
     ];
-    ptTips = 'Alternative: On cool days, a gentle 8-minute sheltered walk through Sengkang General Hospital linkway is often just as quick as waiting for the LRT!';
-    ptFare = '~$0.99 (LRT fare)';
+    ptFare = '$1.09 (SimplyGo / EZ-Link)';
   } else if (isChangiOrJewel) {
     ptTime = 28;
     ptDist = 16.5;
-    ptSummary = 'Direct Bus 110 outside OLA straight into Jewel & Changi Airport';
-    ptHighlights = ['No train transfers required', 'Express route via Tampines Expressway (TPE)'];
+    ptSummary = 'Bus 110 from Cheng Lim Stn Exit B (Bus Stop 67429) to Changi Airport PTB1 (Bus Stop 95029)';
+    ptHighlights = ['Board at Cheng Lim Stn Exit B (67429)', 'Express via Tampines Expressway (TPE)'];
     ptSteps = [
       {
         stepNumber: 1,
-        instruction: 'Walk 140m to Bus Stop 67429 (Cheng Lim Stn Exit B) on Anchorvale St',
-        detail: 'Directly across the road from OLA main entrance.',
-        distanceOrTime: '2 mins (140 m)',
+        instruction: 'Walk from OLA Executive Condominium (70 Anchorvale Crescent) to Cheng Lim Stn Exit B (Bus Stop 67429)',
+        detail: 'Proceed 140 m along Anchorvale Crescent onto Anchorvale Street to reach Cheng Lim Stn Exit B (Bus Stop 67429).',
+        distanceOrTime: '2 min (140 m)',
         iconType: 'walk',
-        badge: 'Outside OLA',
+        badge: 'Origin Walk',
       },
       {
         stepNumber: 2,
-        instruction: 'Board SBS Transit Bus 110 towards Changi Airport',
-        detail: 'Bus 110 enters TPE Expressway immediately and travels express to Airport Boulevard.',
-        distanceOrTime: '22 mins (6 express stops)',
+        instruction: 'Board Bus 110 at Cheng Lim Stn Exit B (Bus Stop 67429) and alight at Changi Airport PTB1 (Bus Stop 95029)',
+        detail: 'Ride Bus 110 along Anchorvale Street and Tampines Expressway (TPE) onto Airport Boulevard and alight at Changi Airport PTB1 (Bus Stop 95029).',
+        distanceOrTime: '22 min (16.1 km)',
         iconType: 'bus',
-        badge: 'Bus 110 Express',
+        badge: 'Bus 110: 67429 → 95029',
       },
       {
         stepNumber: 3,
-        instruction: 'Alight directly at Jewel Changi Airport / Terminal 1 Basement Bus Bay',
-        detail: 'Step into Jewel Canopy Park, retail atrium, and Terminal 1 check-in.',
-        distanceOrTime: '4 mins walk',
+        instruction: `Walk from Changi Airport PTB1 (Bus Stop 95029) to ${dest.name} (${destRoad})`,
+        detail: `Proceed along Airport Boulevard to arrive at ${dest.name}, ${dest.address}.`,
+        distanceOrTime: '4 min (250 m)',
         iconType: 'flag',
-        badge: 'Jewel Atrium',
+        badge: 'Destination',
       },
     ];
-    ptTips = 'Bus 110 is a resident favourite: highly reliable, wheelchair accessible with dedicated luggage racks for holiday travellers!';
-    ptFare = '~$1.95 (SimplyGo / contactless)';
+    ptFare = '$1.95 (SimplyGo / EZ-Link)';
   } else if (isSKGH) {
-    ptTime = 3;
+    ptTime = 4;
     ptDist = 0.4;
-    ptSummary = 'Direct sheltered linkway walk across Anchorvale Street';
-    ptHighlights = ['100% weather-protected linkway', 'Under 4 minutes door-to-door'];
+    ptSummary = 'Direct walk via Anchorvale Crescent & Anchorvale Street to Sengkang General Hospital';
+    ptHighlights = ['Start: 70 Anchorvale Crescent', 'End: 110 Sengkang East Way'];
     ptSteps = [
       {
         stepNumber: 1,
-        instruction: 'Exit OLA pedestrian gate onto Anchorvale Crescent',
-        detail: 'Follow the covered walkway towards Anchorvale Street.',
-        distanceOrTime: '1 min (80 m)',
+        instruction: 'Walk from OLA Executive Condominium (70 Anchorvale Crescent) to Anchorvale Street crossing',
+        detail: 'Proceed 120 m along Anchorvale Crescent covered linkway to the signalised pedestrian crossing at Anchorvale Street.',
+        distanceOrTime: '2 min (120 m)',
         iconType: 'walk',
-        badge: 'Sheltered',
+        badge: 'Anchorvale Crescent',
       },
       {
         stepNumber: 2,
-        instruction: 'Cross at the signalised pedestrian linkway to Sengkang General Hospital',
-        detail: 'Enter via Medical Centre Tower A or Emergency/Inpatient building.',
-        distanceOrTime: '2 mins (250 m)',
-        iconType: 'walk',
-        badge: 'Hospital Campus',
+        instruction: `Walk across Anchorvale Street onto Sengkang East Way to ${dest.name}`,
+        detail: `Proceed 250 m along Sengkang East Way to arrive at ${dest.name}, ${dest.address}.`,
+        distanceOrTime: '2 min (250 m)',
+        iconType: 'flag',
+        badge: 'Destination',
       },
     ];
-    ptTips = 'Fully wheelchair and stroller friendly with signalised pedestrian crossings and continuous shelter.';
     ptFare = 'Free (Walk)';
   } else if (isWaterway) {
     ptTime = 12;
     ptDist = 2.4;
-    ptSummary = 'Cheng Lim LRT to Sengkang MRT, then 1 stop to Punggol MRT';
-    ptHighlights = ['1 stop on North East Line', 'Direct indoor bridge to Waterway Point'];
+    ptSummary = 'Cheng Lim LRT (SW1) → Sengkang MRT (NE16) → Punggol MRT (NE17)';
+    ptHighlights = ['Board at Cheng Lim LRT (SW1)', 'Alight at Punggol MRT (NE17)'];
     ptSteps = [
       {
         stepNumber: 1,
-        instruction: 'Walk 150m to Cheng Lim LRT (SW1) and take LRT to Sengkang Station',
-        detail: 'Sengkang West loop (1 stop, 2 mins).',
-        distanceOrTime: '4 mins',
-        iconType: 'lrt',
-        badge: 'LRT SW1',
-      },
-      {
-        stepNumber: 2,
-        instruction: 'Transfer to North East Line (NEL) Northbound towards Punggol',
-        detail: 'Board train at Platform B towards Punggol terminal.',
-        distanceOrTime: '3 mins (1 stop)',
-        iconType: 'mrt',
-        badge: 'NEL (Purple)',
-      },
-      {
-        stepNumber: 3,
-        instruction: 'Alight at Punggol MRT (NE17) - Exit A',
-        detail: 'Direct basement and bridge entrances into Waterway Point East/West wings.',
-        distanceOrTime: '2 mins',
-        iconType: 'flag',
-        badge: 'Arrival',
-      },
-    ];
-    ptTips = 'Alternative: Bus 43 or 43M from Sengkang East Road also connects directly into Punggol Central.';
-    ptFare = '~$1.09 (SimplyGo)';
-  } else {
-    // Dynamic Singapore Public Transport steps
-    ptSteps = [
-      {
-        stepNumber: 1,
-        instruction: 'Walk 150m from OLA side gate to Cheng Lim LRT Station (SW1)',
-        detail: 'Sheltered walkway via Anchorvale Crescent.',
-        distanceOrTime: '2 mins (150 m)',
+        instruction: 'Walk from OLA Executive Condominium (70 Anchorvale Crescent) to Cheng Lim LRT Station (SW1)',
+        detail: 'Proceed 150 m along Anchorvale Crescent and Anchorvale Street to Cheng Lim LRT Station (SW1).',
+        distanceOrTime: '2 min (150 m)',
         iconType: 'walk',
-        badge: 'OLA Gate',
+        badge: 'Origin Walk',
       },
       {
         stepNumber: 2,
-        instruction: 'Board Sengkang West LRT to Sengkang Town Centre (SW0 / NE16)',
-        detail: 'Quick 1-stop transfer to the North East Line (NEL).',
-        distanceOrTime: '3 mins (1 stop)',
+        instruction: 'Board Sengkang West LRT (SW) at Cheng Lim LRT Station (SW1) and alight at Sengkang MRT Station (NE16)',
+        detail: 'Ride 1 stop directly from Cheng Lim LRT Station (SW1) and alight at Sengkang MRT Station (NE16).',
+        distanceOrTime: '3 min (0.8 km • 1 stop)',
         iconType: 'lrt',
-        badge: 'LRT SW1 → Sengkang',
+        badge: 'SW: SW1 → NE16',
       },
       {
         stepNumber: 3,
-        instruction: 'Board North East Line (Purple Line) towards ' + (dest.latitude < 1.39 ? 'HarbourFront' : 'Punggol'),
-        detail: isOrchard
-          ? 'Alight at Dhoby Ghaut (NE6), transfer to North South Line (Red) 1 stop to Orchard (NS22).'
-          : isCBD
-          ? 'Direct train to Chinatown / Outram Park or transfer to Downtown Line at Little India.'
-          : `Travel on the MRT network towards ${dest.name}. Connect via Circle Line at Serangoon (NE12) if needed.`,
-        distanceOrTime: `${Math.round(roadDist * 1.8 + 4)} mins`,
+        instruction: 'Board North East Line (NEL) at Sengkang MRT Station (NE16) and alight at Punggol MRT Station (NE17)',
+        detail: 'Ride 1 stop on the North East Line (NEL) from Sengkang MRT Station (NE16) and alight at Punggol MRT Station (NE17).',
+        distanceOrTime: '4 min (1.4 km • 1 stop)',
         iconType: 'mrt',
-        badge: 'MRT Network',
+        badge: 'NE: NE16 → NE17',
       },
       {
         stepNumber: 4,
-        instruction: `Alight at the nearest station and walk to ${dest.name}`,
-        detail: `Follow station directional signs towards ${dest.address || dest.name}.`,
-        distanceOrTime: '3–5 mins',
+        instruction: `Walk from Punggol MRT Station (NE17) to ${dest.name} (${destRoad})`,
+        detail: `Proceed along Punggol Central to arrive at ${dest.name}, ${dest.address}.`,
+        distanceOrTime: '3 min (180 m)',
+        iconType: 'flag',
+        badge: 'Destination',
+      },
+    ];
+    ptFare = '$1.09 (SimplyGo / EZ-Link)';
+  } else {
+    const requiresTransfer = !closestStation.code.startsWith('NE');
+    ptSteps = [
+      {
+        stepNumber: 1,
+        instruction: 'Walk from OLA Executive Condominium (70 Anchorvale Crescent) to Cheng Lim LRT Station (SW1)',
+        detail: 'Proceed 150 m along Anchorvale Crescent and Anchorvale Street to Cheng Lim LRT Station (SW1).',
+        distanceOrTime: '2 min (150 m)',
+        iconType: 'walk',
+        badge: 'Origin Walk',
+      },
+      {
+        stepNumber: 2,
+        instruction: 'Board Sengkang West LRT (SW) at Cheng Lim LRT Station (SW1) and alight at Sengkang MRT Station (NE16)',
+        detail: 'Ride 1 stop from Cheng Lim LRT Station (SW1) and alight at Sengkang MRT Station (NE16).',
+        distanceOrTime: '3 min (0.8 km • 1 stop)',
+        iconType: 'lrt',
+        badge: 'SW: SW1 → NE16',
+      },
+      ...(requiresTransfer
+        ? [
+            {
+              stepNumber: 3,
+              instruction: `Board North East Line (NEL) at Sengkang MRT Station (NE16) and alight at ${closestStation.transferStation}`,
+              detail: `Travel on the North East Line (NEL) from Sengkang MRT Station (NE16) and alight at ${closestStation.transferStation} to transfer.`,
+              distanceOrTime: `${Math.max(4, Math.round(roadDist * 1.1))} min`,
+              iconType: 'mrt' as const,
+              badge: 'North East Line',
+            },
+            {
+              stepNumber: 4,
+              instruction: `Board ${closestStation.line} at ${closestStation.transferStation} and alight at ${closestStation.name} (${closestStation.code})`,
+              detail: `Follow ${closestStation.transferLine} and alight at ${closestStation.name} (${closestStation.code}).`,
+              distanceOrTime: `${Math.max(3, Math.round(roadDist * 0.7))} min`,
+              iconType: 'mrt' as const,
+              badge: closestStation.code,
+            },
+          ]
+        : [
+            {
+              stepNumber: 3,
+              instruction: `Board North East Line (NEL) at Sengkang MRT Station (NE16) and alight at ${closestStation.name} (${closestStation.code})`,
+              detail: `Travel directly on the North East Line (NEL) from Sengkang MRT Station (NE16) and alight at ${closestStation.name} (${closestStation.code}).`,
+              distanceOrTime: `${Math.max(4, Math.round(roadDist * 1.6))} min`,
+              iconType: 'mrt' as const,
+              badge: `NE16 → ${closestStation.code}`,
+            },
+          ]),
+      {
+        stepNumber: requiresTransfer ? 5 : 4,
+        instruction: `Walk from ${closestStation.name} (${closestStation.code}) to ${dest.name} (${destRoad})`,
+        detail: `Proceed from ${closestStation.name} (${closestStation.code}) along ${destRoad} to arrive at ${dest.name}${dest.address ? `, ${dest.address}` : ''}.`,
+        distanceOrTime: '4 min (300 m)',
         iconType: 'flag',
         badge: 'Destination',
       },
     ];
   }
 
-  // --- 2. CAR / DRIVING ---
-  let carTime = Math.max(4, Math.round(roadDist * 1.4 + 3));
-  let carDist = roadDist;
-  let carSummary = 'Via Anchorvale St & TPE Expressway';
-  let carHighlights = ['Immediate access to TPE Exit 10', 'Direct highway arterial corridors'];
-  let carSteps: DirectionStep[] = [
+  // --- 2. CAR / DRIVING (Fallback if routeDataByMode.drive not yet loaded) ---
+  const carTime = Math.max(4, Math.round(roadDist * 1.4 + 3));
+  const carDist = roadDist;
+  const mainHighway = isChangiOrJewel
+    ? 'Tampines Expressway (TPE)'
+    : dest.latitude < 1.35
+    ? 'Tampines Expressway (TPE) & Central Expressway (CTE)'
+    : 'Sengkang East Road';
+  const carSummary = `Via Anchorvale Street → ${mainHighway} → ${destRoad}`;
+  const carHighlights = [`Start: Anchorvale Crescent`, `End: ${destRoad}`];
+  const carSteps: DirectionStep[] = [
     {
       stepNumber: 1,
-      instruction: 'Exit OLA EC basement or surface carpark onto Anchorvale Crescent',
-      detail: 'Turn right at the exit towards Anchorvale Street.',
+      instruction: 'Depart OLA Executive Condominium (70 Anchorvale Crescent) onto Anchorvale Crescent',
+      detail: 'Follow Anchorvale Crescent for 200 m to connect onto Anchorvale Street.',
       distanceOrTime: '1 min (200 m)',
       iconType: 'car',
-      badge: 'OLA Exit',
+      badge: 'Anchorvale Crescent',
     },
     {
       stepNumber: 2,
-      instruction: 'Turn right onto Anchorvale Street towards Sengkang East Road',
-      detail: 'Follow road signs towards Tampines Expressway (TPE).',
-      distanceOrTime: '2 mins (500 m)',
+      instruction: `Turn right onto Anchorvale Street towards ${mainHighway}`,
+      detail: `Follow Anchorvale Street for 500 m to connect onto ${mainHighway}.`,
+      distanceOrTime: '2 min (500 m)',
       iconType: 'car',
-      badge: 'Anchorvale St',
+      badge: 'Anchorvale Street',
     },
     {
       stepNumber: 3,
-      instruction: isChangiOrJewel
-        ? 'Merge onto Tampines Expressway (TPE) Eastbound towards Changi Airport / PIE'
-        : dest.latitude < 1.35
-        ? 'Merge onto TPE (Westbound) and take CTE exit towards City / CBD / SLE'
-        : 'Follow Sengkang East Road / Punggol Road towards destination corridor',
-      detail: isChangiOrJewel
-        ? 'Follow TPE for 14 km straight to Airport Boulevard. Enter Jewel Carpark B2–B5.'
-        : dest.latitude < 1.35
-        ? 'Cruising on Central Expressway (CTE). Watch for peak-hour electronic road pricing (ERP).'
-        : `Continue along the arterial roads towards ${dest.name}.`,
-      distanceOrTime: `${carTime - 3} mins`,
+      instruction: `Continue along ${mainHighway} and turn onto ${destRoad}`,
+      detail: `Follow ${mainHighway} for ${Math.max(0.5, parseFloat((roadDist - 0.7).toFixed(1)))} km to connect onto ${destRoad}.`,
+      distanceOrTime: `${Math.max(1, carTime - 3)} min`,
       iconType: 'car',
-      badge: 'Expressway',
+      badge: destRoad,
     },
     {
       stepNumber: 4,
-      instruction: `Arrive at ${dest.name} parking facility / passenger drop-off`,
-      detail: dest.address ? `Destination: ${dest.address}` : 'Follow destination carpark signage.',
-      distanceOrTime: '1 min',
+      instruction: `Arrive at ${dest.name} on ${destRoad}`,
+      detail: `Destination reached at ${dest.name}${dest.address ? `, ${dest.address}` : ''}.`,
+      distanceOrTime: 'Arrival',
       iconType: 'flag',
-      badge: 'Arrival',
+      badge: 'Destination',
     },
   ];
-  let carTips = 'TPE Exit 10 on Anchorvale Street gives OLA residents one of the fastest expressway on-ramps in Sengkang!';
 
-  if (isSengkangMRT) {
-    carTime = 4;
-    carDist = 1.0;
-    carSummary = 'Anchorvale Cres → Anchorvale St → Sengkang Square';
-    carHighlights = ['Under 5 minutes drive', 'Carpark available at Compass One'];
-    carSteps = [
-      {
-        stepNumber: 1,
-        instruction: 'Exit OLA EC carpark onto Anchorvale Crescent',
-        detail: 'Head towards Anchorvale Street.',
-        distanceOrTime: '1 min (200 m)',
-        iconType: 'car',
-        badge: 'Start',
-      },
-      {
-        stepNumber: 2,
-        instruction: 'Turn onto Anchorvale Street and continue onto Compassvale Road',
-        detail: 'Follow road signs to Sengkang Town Centre.',
-        distanceOrTime: '2 mins (600 m)',
-        iconType: 'car',
-        badge: 'Town Centre',
-      },
-      {
-        stepNumber: 3,
-        instruction: 'Turn into Compass One basement carpark or Sengkang Square drop-off',
-        detail: 'Ample basement parking with EV charging stations.',
-        distanceOrTime: '1 min',
-        iconType: 'flag',
-        badge: 'Carpark',
-      },
-    ];
-    carTips = 'Compass One carpark offers 10 minutes grace period for passenger pick-up and drop-off.';
-  }
-
-  // --- 3. BIKE / CYCLING ---
-  let bikeTime = Math.max(3, Math.round(roadDist * 3.4));
-  let bikeDist = parseFloat((straightDist * 1.15).toFixed(1));
-  let bikeSummary = 'Via Punggol River Park Connector Network (PCN)';
-  let bikeHighlights = ['Dedicated off-road cycling paths', 'Scenic waterfront green corridor'];
-  let bikeSteps: DirectionStep[] = [
+  // --- 3. BIKE / CYCLING (Fallback if routeDataByMode.cycle not yet loaded) ---
+  const bikeTime = Math.max(3, Math.round(roadDist * 3.4));
+  const bikeDist = Math.max(0.2, parseFloat((straightDist * 1.15).toFixed(1)));
+  const bikeSummary = `Via Anchorvale Crescent → Anchorvale Street → ${destRoad}`;
+  const bikeHighlights = ['Start: Anchorvale Crescent', `End: ${destRoad}`];
+  const bikeSteps: DirectionStep[] = [
     {
       stepNumber: 1,
-      instruction: 'Exit OLA EC gate and join the adjacent Punggol River Park Connector (PCN)',
-      detail: 'Paved, wide cycling path directly behind Anchorvale Crescent.',
-      distanceOrTime: '1 min (100 m)',
+      instruction: 'Depart OLA Executive Condominium (70 Anchorvale Crescent) onto Anchorvale Crescent',
+      detail: 'Follow Anchorvale Crescent cycling path for 150 m to connect onto Anchorvale Street.',
+      distanceOrTime: '1 min (150 m)',
       iconType: 'bike',
-      badge: 'PCN Entry',
+      badge: 'Anchorvale Crescent',
     },
     {
       stepNumber: 2,
-      instruction: isWaterway
-        ? 'Ride North along Sungei Punggol PCN towards Sengkang Riverside Park & Punggol Waterway'
-        : isSengkangMRT
-        ? 'Ride along Anchorvale Street intra-town cycling path towards Sengkang Town Centre'
-        : 'Follow the designated National Parks Park Connector Network (PCN) path',
-      detail: isWaterway
-        ? 'Seamless, car-free scenic route alongside the waterfront all the way to Waterway Point boardwalk.'
-        : 'Wide paths with clear pedestrian/cyclist lane markings and street lamps.',
-      distanceOrTime: `${bikeTime - 2} mins`,
+      instruction: `Cycle along Anchorvale Street and connect onto ${destRoad}`,
+      detail: `Follow Anchorvale Street and Punggol River Park Connector for ${Math.max(0.2, parseFloat((bikeDist - 0.15).toFixed(1)))} km to connect onto ${destRoad}.`,
+      distanceOrTime: `${Math.max(1, bikeTime - 2)} min`,
       iconType: 'bike',
-      badge: 'Cycling Track',
+      badge: destRoad,
     },
     {
       stepNumber: 3,
-      instruction: `Arrive at ${dest.name} bicycle parking zone`,
-      detail: 'Park at yellow-box bicycle bays or sheltered public bike racks.',
-      distanceOrTime: '1 min',
+      instruction: `Arrive at ${dest.name} on ${destRoad}`,
+      detail: `Destination reached at ${dest.name}${dest.address ? `, ${dest.address}` : ''}.`,
+      distanceOrTime: 'Arrival',
       iconType: 'flag',
-      badge: 'Bike Parking',
+      badge: 'Destination',
     },
   ];
-  let bikeTips = 'Keep speeds under 25 km/h on shared paths. Use front white and rear red lights when cycling after dusk.';
 
-  if (isSengkangMRT) {
-    bikeTime = 4;
-    bikeDist = 0.9;
-    bikeSummary = 'Anchorvale St Dedicated Cycling Path to MRT Bicycle Station';
-    bikeHighlights = ['Completely flat terrain', 'Over 200 sheltered bike racks at MRT'];
-  } else if (isWaterway) {
-    bikeTime = 10;
-    bikeDist = 2.3;
-    bikeSummary = 'Waterfront Punggol River PCN straight to mall boardwalk';
-    bikeHighlights = ['100% car-free path', 'Connects into Coast-to-Coast Central Trail'];
-  }
-
-  // --- 4. WALKING ---
-  let walkTime = Math.max(3, Math.round(roadDist * 12.0));
-  let walkDist = roadDist;
-  let walkSummary = 'Via Sengkang town sheltered walkway network';
-  let walkHighlights = ['Continuous sheltered linkways', 'Wheelchair and pram accessible'];
-  let walkSteps: DirectionStep[] = [
+  // --- 4. WALKING (Fallback if routeDataByMode.walk not yet loaded) ---
+  const walkTime = Math.max(3, Math.round(roadDist * 12.0));
+  const walkDist = roadDist;
+  const walkSummary = `Via Anchorvale Crescent → Anchorvale Street → ${destRoad}`;
+  const walkHighlights = ['Start: Anchorvale Crescent', `End: ${destRoad}`];
+  const walkSteps: DirectionStep[] = [
     {
       stepNumber: 1,
-      instruction: 'Exit OLA EC via sheltered pedestrian gate onto Anchorvale Crescent',
-      detail: 'Turn towards Cheng Lim LRT / Anchorvale Street.',
-      distanceOrTime: '1 min (80 m)',
+      instruction: 'Depart OLA Executive Condominium (70 Anchorvale Crescent) onto Anchorvale Crescent',
+      detail: 'Follow Anchorvale Crescent walkway for 120 m to connect onto Anchorvale Street.',
+      distanceOrTime: '2 min (120 m)',
       iconType: 'walk',
-      badge: 'OLA Gate',
+      badge: 'Anchorvale Crescent',
     },
     {
       stepNumber: 2,
-      instruction: isSKGH
-        ? 'Cross at the covered linkway signal directly into Sengkang General Hospital campus'
-        : isSengkangMRT
-        ? 'Follow continuous sheltered linkways past SKGH campus towards Sengkang Square'
-        : `Walk along the paved pedestrian pavement towards ${dest.name}`,
-      detail: 'Equipped with ramps, tactile paving, and rain protection.',
-      distanceOrTime: `${walkTime - 2} mins`,
+      instruction: `Walk along Anchorvale Street and connect onto ${destRoad}`,
+      detail: `Follow Anchorvale Street pedestrian walkway for ${Math.max(0.2, parseFloat((walkDist - 0.12).toFixed(1)))} km to connect onto ${destRoad}.`,
+      distanceOrTime: `${Math.max(1, walkTime - 2)} min`,
       iconType: 'walk',
-      badge: 'Sheltered Link',
+      badge: destRoad,
     },
     {
       stepNumber: 3,
-      instruction: `Arrive at ${dest.name}`,
-      detail: `Entrance on ${dest.address || dest.name}.`,
-      distanceOrTime: '1 min',
+      instruction: `Arrive at ${dest.name} on ${destRoad}`,
+      detail: `Destination reached at ${dest.name}${dest.address ? `, ${dest.address}` : ''}.`,
+      distanceOrTime: 'Arrival',
       iconType: 'flag',
-      badge: 'Arrival',
+      badge: 'Destination',
     },
   ];
-  let walkTips = 'Singapore weather tip: OLA features sheltered walkway access to Cheng Lim LRT and SKGH, keeping you dry on rainy days.';
 
-  if (isSengkangMRT) {
-    walkTime = 9;
-    walkDist = 0.8;
-    walkSummary = '100% sheltered linkway through SKGH into Sengkang MRT Exit A';
-    walkHighlights = ['Zero rain exposure', 'Air-conditioned hospital concourse shortcut'];
-    walkSteps = [
-      {
-        stepNumber: 1,
-        instruction: 'Exit OLA pedestrian gate onto Anchorvale Crescent covered linkway',
-        detail: 'Walk 100m to the signalised crossing at Anchorvale Street.',
-        distanceOrTime: '2 mins (120 m)',
-        iconType: 'walk',
-        badge: 'Covered Walk',
-      },
-      {
-        stepNumber: 2,
-        instruction: 'Enter Sengkang General Hospital sheltered connector corridor',
-        detail: 'Walk through the pleasant, shaded hospital campus linkway alongside Sengkang East Way.',
-        distanceOrTime: '5 mins (450 m)',
-        iconType: 'walk',
-        badge: 'Hospital Linkway',
-      },
-      {
-        stepNumber: 3,
-        instruction: 'Arrive at Sengkang MRT Station (Exit A) & Compass One entrance',
-        detail: 'Direct access to train gantries, taxi stand, and Compass One retail.',
-        distanceOrTime: '2 mins (150 m)',
-        iconType: 'flag',
-        badge: 'Sengkang MRT',
-      },
-    ];
-    walkTips = 'Resident Pro-tip: This 9-minute walk is fully sheltered from rain and tropical sun!';
-  } else if (isSKGH) {
-    walkTime = 4;
-    walkDist = 0.35;
-    walkSummary = 'Direct covered walkway across Anchorvale St';
-    walkHighlights = ['350m door-to-door', 'Full rain shelter'];
-  }
-
-  return {
+  const fallbackMap: Record<TravelMode, ModeDirections> = {
     pt: {
       mode: 'pt',
       modeLabel: 'Public Transport',
@@ -474,8 +1121,8 @@ export function generateDetailedDirections(
       summary: carSummary,
       highlights: carHighlights,
       steps: carSteps,
-      residentTips: carTips,
-      fareOrCost: isChangiOrJewel ? 'TPE (No ERP during off-peak)' : 'ERP rates vary by time',
+      residentTips: `Route from OLA Executive Condominium (70 Anchorvale Crescent) via Anchorvale Street to ${dest.name} (${destRoad}).`,
+      fareOrCost: 'ERP & carpark rates apply',
     },
     cycle: {
       mode: 'cycle',
@@ -485,7 +1132,7 @@ export function generateDetailedDirections(
       summary: bikeSummary,
       highlights: bikeHighlights,
       steps: bikeSteps,
-      residentTips: bikeTips,
+      residentTips: `Cycle from OLA Executive Condominium (70 Anchorvale Crescent) via Anchorvale Street to ${dest.name} (${destRoad}).`,
       fareOrCost: 'Zero emissions',
     },
     walk: {
@@ -496,8 +1143,29 @@ export function generateDetailedDirections(
       summary: walkSummary,
       highlights: walkHighlights,
       steps: walkSteps,
-      residentTips: walkTips,
+      residentTips: `Walk from OLA Executive Condominium (70 Anchorvale Crescent) via Anchorvale Street to ${dest.name} (${destRoad}).`,
       fareOrCost: 'Free & healthy',
     },
+  };
+
+  // Override with live backend API data from /api/onemap-route whenever available
+  const apiPt = routeDataByMode?.pt
+    ? buildPublicTransportFromApi(dest, routeDataByMode.pt)
+    : null;
+  const apiDrive = routeDataByMode?.drive
+    ? buildStreetRouteFromApi('drive', dest, routeDataByMode.drive)
+    : null;
+  const apiCycle = routeDataByMode?.cycle
+    ? buildStreetRouteFromApi('cycle', dest, routeDataByMode.cycle)
+    : null;
+  const apiWalk = routeDataByMode?.walk
+    ? buildStreetRouteFromApi('walk', dest, routeDataByMode.walk)
+    : null;
+
+  return {
+    pt: apiPt || fallbackMap.pt,
+    drive: apiDrive || fallbackMap.drive,
+    cycle: apiCycle || fallbackMap.cycle,
+    walk: apiWalk || fallbackMap.walk,
   };
 }

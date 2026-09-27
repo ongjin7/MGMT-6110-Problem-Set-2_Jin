@@ -91,9 +91,14 @@ export default async function handler(req, res) {
     let routingUrl = `https://www.onemap.gov.sg/api/public/routingsvc/route?start=${OLA_COORDS}&end=${endCoords}&routeType=${routeType}`;
 
     if (routeType === 'pt') {
-      const now = new Date();
-      const dateStr = `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}-${now.getFullYear()}`;
-      const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:00`;
+      const sgtDate = new Date(Date.now() + 8 * 3600 * 1000);
+      const dateStr = `${String(sgtDate.getUTCMonth() + 1).padStart(2, '0')}-${String(sgtDate.getUTCDate()).padStart(2, '0')}-${sgtDate.getUTCFullYear()}`;
+      const sgtHour = sgtDate.getUTCHours();
+      const sgtMinute = sgtDate.getUTCMinutes();
+      const timeStr =
+        sgtHour < 6 || sgtHour >= 23
+          ? '09:00:00'
+          : `${String(sgtHour).padStart(2, '0')}:${String(sgtMinute).padStart(2, '0')}:00`;
       routingUrl += `&date=${dateStr}&time=${timeStr}&mode=TRANSIT`;
     }
 
