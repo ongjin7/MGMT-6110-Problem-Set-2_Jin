@@ -70,6 +70,7 @@ export const BusArrivalSection: React.FC<BusArrivalSectionProps> = ({
   const [arrivalState, setArrivalState] = useState<FetchState>('idle');
   const [upstreamStatus, setUpstreamStatus] = useState<number | null>(null);
   const [services, setServices] = useState<BusServiceArrival[]>([]);
+  const [servicesEnded, setServicesEnded] = useState<boolean>(false);
   const [lastUpdatedTime, setLastUpdatedTime] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
@@ -113,6 +114,7 @@ export const BusArrivalSection: React.FC<BusArrivalSectionProps> = ({
         if (!isMountedRef.current || activeStopCodeRef.current !== stopCode) return;
 
         if (!res.ok) {
+          setServicesEnded(false);
           setUpstreamStatus(res.status);
           if (res.status === 401 || res.status === 403 || res.status === 503) {
             setArrivalState('refused');
@@ -125,26 +127,55 @@ export const BusArrivalSection: React.FC<BusArrivalSectionProps> = ({
         const data = await res.json();
         if (!isMountedRef.current || activeStopCodeRef.current !== stopCode) return;
 
+        // Validate that response is a well-formed bus-stop arrival payload
+        const isValidStopPayload =
+          Boolean(data) &&
+          typeof data === 'object' &&
+          typeof data.busStopCode === 'string' &&
+          data.busStopCode.trim() === stopCode.trim() &&
+          Array.isArray(data.services) &&
+          data.services.every(
+            (svc: unknown) =>
+              Boolean(svc) &&
+              typeof svc === 'object' &&
+              typeof (svc as BusServiceArrival).serviceNo === 'string'
+          );
+
+        if (!isValidStopPayload) {
+          setServices([]);
+          setServicesEnded(false);
+          setArrivalState('empty');
+          return;
+        }
+
         const fetchedAt = formatSgtTimeHhMmSs(new Date());
         setLastUpdatedTime(fetchedAt);
 
-        if (!data.services || data.services.length === 0) {
+        const updatedServices: BusServiceArrival[] = data.services.map(
+          (svc: BusServiceArrival) => ({
+            ...svc,
+            nextBus: refreshTimingCountdown(svc.nextBus),
+            nextBus2: refreshTimingCountdown(svc.nextBus2),
+            nextBus3: refreshTimingCountdown(svc.nextBus3),
+          })
+        );
+
+        const hasUpcomingArrivals = updatedServices.some(
+          svc => Boolean(svc.nextBus || svc.nextBus2 || svc.nextBus3)
+        );
+
+        if (!hasUpcomingArrivals) {
           setServices([]);
+          setServicesEnded(true);
           setArrivalState('empty');
         } else {
-          const updatedServices: BusServiceArrival[] = data.services.map(
-            (svc: BusServiceArrival) => ({
-              ...svc,
-              nextBus: refreshTimingCountdown(svc.nextBus),
-              nextBus2: refreshTimingCountdown(svc.nextBus2),
-              nextBus3: refreshTimingCountdown(svc.nextBus3),
-            })
-          );
           setServices(updatedServices);
+          setServicesEnded(false);
           setArrivalState('success');
         }
       } catch (err) {
         if (!isMountedRef.current || activeStopCodeRef.current !== stopCode) return;
+        setServicesEnded(false);
         setArrivalState('unreachable');
       } finally {
         if (inFlightStopRef.current === stopCode) {
@@ -509,6 +540,11 @@ export const BusArrivalSection: React.FC<BusArrivalSectionProps> = ({
           state={arrivalState}
           upstreamStatus={upstreamStatus}
           customContext="LTA DataMall Bus Arrival Service"
+          emptyMessage={
+            servicesEnded
+              ? 'Bus services have ended for the day. Please check again in the morning when services resume.'
+              : undefined
+          }
           onRetry={handleManualRefresh}
         />
 

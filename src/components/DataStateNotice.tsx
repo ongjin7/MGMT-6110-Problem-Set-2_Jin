@@ -7,6 +7,7 @@ interface DataStateNoticeProps {
   state: FetchState;
   upstreamStatus?: number | null;
   customContext?: string;
+  emptyMessage?: string;
   onRetry?: () => void;
   compact?: boolean;
 }
@@ -16,6 +17,7 @@ export const DataStateNotice: React.FC<DataStateNoticeProps> = ({
   state,
   upstreamStatus,
   customContext,
+  emptyMessage,
   onRetry,
   compact = false,
 }) => {
@@ -26,7 +28,8 @@ export const DataStateNotice: React.FC<DataStateNoticeProps> = ({
   // Exact 4 distinct sentences as demanded by prompt
   const sentences = {
     loading: 'Fetching the latest live data from official Singapore government services...',
-    empty: 'No data records were returned for this request from the official database.',
+    empty:
+      emptyMessage || 'No data records were returned for this request from the official database.',
     refused: upstreamStatus
       ? `The upstream service refused the request due to authentication or query parameters (HTTP ${upstreamStatus}).`
       : 'The upstream service refused the request due to authentication or query parameters.',
