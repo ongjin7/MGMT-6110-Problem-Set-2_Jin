@@ -632,3 +632,57 @@ Guardrails:
 **What i changed next and why:** Nothing. Moved on to push code to github after i accepted the current state of the build.
 
 ---
+## Prompt 11 - Arbiter usage for comparison of 2 heuristic analysis
+```
+ROLE: You are a neutral arbiter between two usability reviewers who rated the same
+problem differently. You do not know which of them built the product. Do not try to
+work it out.
+CONTEXT: The product is an AI-augmented web app. The app helps condo residents to navigate across three tabs, one for directions and transport advice from the condo, the other for the vicinity weather and air quality to propose activities and last one being a condo hub forum and listing of home bakeries/ cafes. 
+Both reviewers inspected it against Nielsen's ten usability heuristics and rated the
+problem on this severity scale:
+0 I don't agree that this is a usability problem at all.
+1 Cosmetic problem only. Need not be fixed unless extra time is available.
+2 Minor usability problem. Fixing this should be given low priority.
+3 Major usability problem. Important to fix, so should be given high priority.
+4 Usability catastrophe. Imperative to fix before the product can be released.
+A rating rests on four factors: how often the problem happens, what it costs when it
+does, whether the person can learn around it, and whether it damages the product's
+standing out of proportion.
+REVIEWER A:
+Where: OLA Buddy at the OLA Hub Screen
+Issue Identified: For the OLA Buddy app, I have assumed that most functionalities are intuitive and easy to use. However, it may still be worthwhile to provide additional help or guidance for new users, particularly on how to navigate the forums, register their home bakery, and understand the backend APIs used by the app, including why these data sources can be trusted. Providing simple onboarding guidance or help documentation could make these features easier to understand and use.
+My rating: 2 – Minor Usability Problem. Users may encounter some difficulty and may need to explore the app on their own before fully understanding how to use all of its functions.
+Screen or System: Only Screen changes are required as the fix is to add more instances where help and documentation could come in handy without increasing website/ app complexity.
+The Repair: To prompt to include more help and documentation support for complicated activities.
+REVIEWER B:
+Where: on the first screen, at the top of the page.
+What I did, what I saw: I opened the page for the first time. It shows "OLA Buddy", an address, and a search box asking where I would like to go, but nothing says what this product is, who it is for, or what it can do for me. I scrolled the whole page and still could not tell whether it was a transport tool, a residents' noticeboard or something wider — there are tabs for Directions, Weather and OLA Hub, and no explanation of what sits behind any of them.
+Which heuristic: 10, Help and Documentation.
+Screen or system: Screen. Everything needed to explain the product is a matter of wording on the page.
+Severity, and why: 3, driven by how often it happens. Every first-time visitor meets this before anything else, and someone who cannot tell what a product does has no reason to trust the answers it gives or to come back to it.
+The repair: A line near the top says what OLA Buddy is for and what a resident can do with it, so a first-time visitor knows what they are looking at before they type anything.  
+EVIDENCE NEITHER REVIEWER CONTROLS:
+- Reviewers who raised this problem independently, counting A and B: 2/4
+- Severities that reviewers other than A and B gave this problem: NONE
+GOAL: Judge the evidence, not the reviewers.
+1. Say whether A and B describe the same problem. If they do not, say so and stop.
+2. For each of the four factors, say what the evidence shows and what it cannot show.
+3. Give the severity the evidence supports, and name the factor that decided it.
+4. Name the one observation that would change your rating, and say how it could be
+   collected quickly.
+GUARDRAILS: Do not split the difference between A and B unless the evidence puts the
+rating there. If the evidence is too thin to decide, say so plainly instead of
+inventing a reason. Do not ask which reviewer built the product.
+```
+**What came back:** 
+A and B do not describe the same usability problem.
+Reviewer A is describing a task-level help/documentation problem inside the OLA Hub: new users may need guidance on specific activities such as navigating forums, registering a home bakery, or understanding the app’s data sources.
+Reviewer B is describing a first-visit orientation problem on the landing screen: a new user cannot immediately tell what OLA Buddy is, who it is for, or what the three tabs are intended to do.
+They fall under the same Nielsen heuristic, Heuristic 10: Help and Documentation, but the underlying failures are different:
+- A: “I understand the product, but I may need help using some of its functions.”
+- B: “I do not yet understand what the product itself is for.”
+Because the prompt requires the arbitration to stop if they are not the same problem, no severity reconciliation between A’s 2 and B’s 3 is warranted from this evidence..
+
+**What i changed next and why:** Studied and agreed with the arbiter's analysis.
+
+---
